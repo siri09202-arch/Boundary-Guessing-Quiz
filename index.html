@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>県境あてチャレンジ</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+    background:#f1f5f9;color:#0f172a;
+  }
+  #app{display:flex;flex-direction:column;height:100dvh;max-width:1200px;margin:0 auto}
+  header{
+    display:flex;align-items:center;gap:10px;padding:10px 14px;
+    background:#fff;border-bottom:1px solid #e2e8f0;flex-wrap:wrap
+  }
+  header h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.02em}
+  .grow{flex:1}
+  select{
+    font:inherit;font-size:14px;padding:6px 10px;border-radius:8px;
+    border:1px solid #cbd5e1;background:#fff;color:inherit;max-width:180px
+  }
+  .stage{position:relative;flex:1;min-height:0;background:#fff;overflow:hidden}
+  canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+  .hint{
+    position:absolute;left:50%;bottom:14px;transform:translateX(-50%);
+    background:rgba(255,255,255,.95);border:1px solid #e2e8f0;border-radius:999px;
+    padding:7px 16px;font-size:13px;font-weight:600;color:#334155;
+    box-shadow:0 4px 14px rgba(15,23,42,.08);pointer-events:none;white-space:nowrap;
+    max-width:calc(100% - 110px);overflow:hidden;text-overflow:ellipsis
+  }
+  .zoomctl{
+    position:absolute;right:12px;top:12px;z-index:5;
+    display:flex;flex-direction:column;gap:6px
+  }
+  .zoomctl button{
+    width:40px;height:40px;padding:0;margin:0;border-radius:11px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:19px;font-weight:700;line-height:1;color:#334155;
+    background:rgba(255,255,255,.95);border:1px solid #e2e8f0;
+    box-shadow:0 3px 12px rgba(15,23,42,.14)
+  }
+  .zoomctl button:hover:not(:disabled){background:#fff;border-color:#94a3b8}
+  footer{
+    display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;
+    border-top:1px solid #e2e8f0;flex-wrap:wrap
+  }
+  #target{font-size:14px;font-weight:700;min-height:20px}
+  #target small{font-weight:600;color:#94a3b8;font-size:11px;margin-right:6px;letter-spacing:.08em}
+  .btns{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+  button{
+    font:inherit;font-size:14px;font-weight:600;padding:9px 16px;border-radius:10px;
+    border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer;
+    transition:background .15s,border-color .15s;white-space:nowrap
+  }
+  button:hover:not(:disabled){background:#f8fafc;border-color:#94a3b8}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+  button.primary:hover:not(:disabled){background:#1d4ed8;border-color:#1d4ed8}
+  #btnHint[aria-pressed="true"]{
+    background:#ecfdf5;border-color:#10b981;color:#047857
+  }
+  #btnHint[aria-pressed="true"]:hover{background:#d1fae5}
+  [hidden]{display:none!important}
+  #loading{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:16px;background:#f1f5f9;z-index:50;font-size:14px;color:#475569;
+    padding:24px;text-align:center;line-height:1.7
+  }
+  .spin{width:30px;height:30px;border:3px solid #cbd5e1;border-top-color:#2563eb;border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spin"></div><div id="loadingTxt">地図データを読み込み中…</div></div>
+
+<div id="app">
+  <header>
+    <h1>🗾 県境あてチャレンジ</h1>
+    <div class="grow"></div>
+    <select id="prefSel" aria-label="都道府県を選択"></select>
+    <button id="btnHint" aria-pressed="false" title="描くときの見本を表示／非表示">見本 OFF</button>
+    <button id="btnRandom">🎲 ランダム</button>
+  </header>
+
+  <div class="stage">
+    <canvas id="cv"></canvas>
+    <div class="hint" id="hint"></div>
+    <div class="zoomctl" id="zoomCtl" hidden>
+      <button id="zIn" title="拡大" aria-label="拡大">＋</button>
+      <button id="zOut" title="縮小" aria-label="縮小">−</button>
+      <button id="zReset" title="全体表示" aria-label="全体表示">⤾</button>
+    </div>
+  </div>
+
+  <footer>
+    <div id="target"></div>
+    <div class="btns">
+      <button id="btnClear">クリア</button>
+      <button id="btnPlace" class="primary">この形で配置 →</button>
+      <button id="btnBack">← 描き直す</button>
+      <button id="btnGrade" class="primary">決定して採点</button>
+      <button id="btnNext" class="primary">次の都道府県 →</button>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   定数
+   ========================================================= */
+const DEG = Math.PI / 180;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 18;
+
+/* 閉じたと判定する距離（px） */
+const CLOSE_DIST = 40;
+/* 自動で閉じるフォールバック（閉じ損ね対策） */
+const AUTO_CLOSE_AREA = 800;
+const AUTO_CLOSE_MIN_PTS = 12;
+/* 最小ポリゴン面積 */
+const MIN_POLY_AREA = 300;
+
+const PREFS = [
+  "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
+  "茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県",
+  "新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県",
+  "三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県",
+  "鳥取県","島根県","岡山県","広島県","山口県",
+  "徳島県","香川県","愛媛県","高知県",
+  "福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"
+];
+
+const ROMAJI = {
+  hokkaido:"北海道", aomori:"青森県", iwate:"岩手県", miyagi:"宮城県", akita:"秋田県",
+  yamagata:"山形県", fukushima:"福島県", ibaraki:"茨城県", tochigi:"栃木県", gunma:"群馬県",
+  saitama:"埼玉県", chiba:"千葉県", tokyo:"東京都", kanagawa:"神奈川県", niigata:"新潟県",
+  toyama:"富山県", ishikawa:"石川県", fukui:"福井県", yamanashi:"山梨県", nagano:"長野県",
+  gifu:"岐阜県", shizuoka:"静岡県", aichi:"愛知県", mie:"三重県", shiga:"滋賀県",
+  kyoto:"京都府", osaka:"大阪府", hyogo:"兵庫県", nara:"奈良県", wakayama:"和歌山県",
+  tottori:"鳥取県", shimane:"島根県", okayama:"岡山県", hiroshima:"広島県", yamaguchi:"山口県",
+  tokushima:"徳島県", kagawa:"香川県", ehime:"愛媛県", kochi:"高知県", fukuoka:"福岡県",
+  saga:"佐賀県", nagasaki:"長崎県", kumamoto:"熊本県", oita:"大分県", miyazaki:"宮崎県",
+  kagoshima:"鹿児島県", okinawa:"沖縄県"
+};
+
+const BASE_NAMES = PREFS.map(p => p.replace(/[都府県]$/, ""));
+
+/* 日本域の取り込み範囲（南鳥島・沖ノ鳥島などの超遠隔島を除外） */
+const BX0 = 122.5 * DEG, BX1 = 146.5 * DEG;
+const BY0 = projLat(46), BY1 = projLat(24);
+
+/* 読み込み候補（上から順に試す） */
+const SOURCES = [
+  "https://cdn.jsdelivr.net/gh/dataofjapan/land@master/japan.geojson",
+  "https://raw.githubusercontent.com/dataofjapan/land/master/japan.geojson",
+  "https://geolonia.github.io/japanese-prefectures/prefectures.json",
+  "https://raw.githubusercontent.com/geolonia/japanese-prefectures/master/prefectures.json"
+];
+
+/* =========================================================
+   投影（Web メルカトル / y は下向き）
+   ========================================================= */
+function projLon(lon){ return lon * DEG; }
+function projLat(lat){
+  lat = Math.max(-85, Math.min(85, lat));
+  return -Math.log(Math.tan(Math.PI / 4 + lat * DEG / 2));
+}
+
+/* =========================================================
+   状態
+   ========================================================= */
+const state = {
+  loaded: false,
+  prefs: new Map(),       // name -> {name, rings, bbox, area}
+  mapBBox: null,          // 日本全体のワールド座標範囲
+
+  base: { s: 1, ox: 0, oy: 0 },   // フィット時の変換
+  view: { s: 1, ox: 0, oy: 0 },   // 実際に使う変換（ズーム・パン込み）
+  zoom: 1,
+  pan: { x: 0, y: 0 },
+
+  fitBBox: null,
+  current: null,
+  mode: "draw",           // draw | place | result
+
+  polys: [],              // 確定した閉領域 [{pts, area, centroid}]
+  stroke: null,           // 描画中のストローク（点列）
+  placed: { x: 0, y: 0 }, // 図形の基準点を置くワールド座標
+  scale: 1,
+  score: 0,
+
+  showHint: false         // 見本（見本地図）の表示 初期OFF
+};
+
+let gesture = null;              // {type:'pan'|'shape'|'pinch', ...}
+const pointers = new Map();      // pointerId -> {x,y}
+
+/* =========================================================
+   DOM
+   ========================================================= */
+const CV = document.getElementById("cv");
+const ctx = CV.getContext("2d");
+let W = 1, H = 1, DPR = 1;
+let mapCache = null;
+let viewDirty = true;
+let rafId = 0;
+
+/* 見本パスのキャッシュ */
+let hintCache = null;   // { key, path }
+
+/* =========================================================
+   幾何ユーティリティ
+   ========================================================= */
+function ringArea(pts){
+  let a = 0;
+  for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){
+    a += pts[j].x * pts[i].y - pts[i].x * pts[j].y;
+  }
+  return a / 2;
+}
+
+function ringCentroid(pts){
+  let a = 0, cx = 0, cy = 0;
+  for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){
+    const f = pts[j].x * pts[i].y - pts[i].x * pts[j].y;
+    a += f;
+    cx += (pts[j].x + pts[i].x) * f;
+    cy += (pts[j].y + pts[i].y) * f;
+  }
+  a *= 0.5;
+  if(Math.abs(a) < 1e-12){
+    let sx = 0, sy = 0;
+    for(const p of pts){ sx += p.x; sy += p.y; }
+    return { x: sx / pts.length, y: sy / pts.length };
+  }
+  return { x: cx / (6 * a), y: cy / (6 * a) };
+}
+
+function bboxOfPts(pts){
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for(const p of pts){
+    if(p.x < minX) minX = p.x;
+    if(p.x > maxX) maxX = p.x;
+    if(p.y < minY) minY = p.y;
+    if(p.y > maxY) maxY = p.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function bboxOfRings(rings){
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for(const r of rings){
+    for(const p of r){
+      if(p.x < minX) minX = p.x;
+      if(p.x > maxX) maxX = p.x;
+      if(p.y < minY) minY = p.y;
+      if(p.y > maxY) maxY = p.y;
+    }
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function pointInPoly(x, y, poly){
+  let inside = false;
+  for(let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if(((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+
+/* ストロークが始点付近に戻ってきたか */
+function nearStart(pts){
+  if(pts.length < 6) return false;
+  const a = pts[0], b = pts[pts.length - 1];
+  return Math.hypot(a.x - b.x, a.y - b.y) < CLOSE_DIST;
+}
+
+/* 確定ポリゴン全体の合計面積・重心 */
+function combinedShape(){
+  const polys = state.polys;
+  if(!polys.length) return null;
+  let A = 0, cx = 0, cy = 0;
+  for(const p of polys){
+    A += p.area;
+    cx += p.centroid.x * p.area;
+    cy += p.centroid.y * p.area;
+  }
+  const c = A > 0 ? { x: cx / A, y: cy / A } : { x: polys[0].centroid.x, y: polys[0].centroid.y };
+  return { area: A, centroid: c };
+}
+
+/* 配置後のユーザー図形（ワールド座標のリング配列） */
+function userWorldRings(){
+  const comb = combinedShape();
+  if(!comb) return [];
+  const s = state.scale;
+  return state.polys.map(poly => poly.pts.map(p => ({
+    x: state.placed.x + (p.x - comb.centroid.x) * s,
+    y: state.placed.y + (p.y - comb.centroid.y) * s
+  })));
+}
+
+function pointInUserShape(sx, sy){
+  const rings = userWorldRings();
+  const v = state.view;
+  for(const ring of rings){
+    const sp = ring.map(q => ({ x: q.x * v.s + v.ox, y: q.y * v.s + v.oy }));
+    if(pointInPoly(sx, sy, sp)) return true;
+  }
+  return false;
+}
+
+/* =========================================================
+   GeoJSON 読み込み・正規化
+   ========================================================= */
+function normalizeName(props){
+  const strs = [];
+  for(const k in props){
+    if(typeof props[k] === "string") strs.push(props[k]);
+  }
+  for(const raw of strs){
+    const t = raw.replace(/[\s\u3000]/g, "");
+    if(!t) continue;
+
+    let idx = PREFS.indexOf(t);
+    if(idx >= 0) return PREFS[idx];
+
+    idx = BASE_NAMES.indexOf(t.replace(/[都府県]$/, ""));
+    if(idx >= 0 && t.length >= 2) return PREFS[idx];
+
+    let key = t.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z]/g, "");
+    if(!key) continue;
+    if(ROMAJI[key]) return ROMAJI[key];
+    if(key.length > 4){
+      for(const suf of ["ken", "fu", "to"]){
+        if(key.endsWith(suf)){
+          const k2 = key.slice(0, -suf.length);
+          if(ROMAJI[k2]) return ROMAJI[k2];
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function collectRings(geom, out){
+  if(!geom) return;
+  const t = geom.type;
+  if(t === "Polygon"){
+    for(const ring of geom.coordinates) out.push(ring);
+  } else if(t === "MultiPolygon"){
+    for(const poly of geom.coordinates) for(const ring of poly) out.push(ring);
+  } else if(t === "GeometryCollection"){
+    for(const g of geom.geometries) collectRings(g, out);
+  }
+}
+
+function projectRing(ring){
+  const pts = [];
+  for(const c of ring){
+    if(!c || c.length < 2) continue;
+    const lon = +c[0], lat = +c[1];
+    if(!isFinite(lon) || !isFinite(lat)) continue;
+    pts.push({ x: projLon(lon), y: projLat(lat) });
+  }
+  return pts;
+}
+
+function decimate(pts, tol){
+  tol = tol || 0.00015;
+  if(pts.length < 4) return pts;
+  const out = [pts[0]];
+  const t2 = tol * tol;
+  for(let i = 1; i < pts.length; i++){
+    const p = pts[i], q = out[out.length - 1];
+    const dx = p.x - q.x, dy = p.y - q.y;
+    if(dx * dx + dy * dy >= t2) out.push(p);
+  }
+  if(out.length >= 3){
+    const f = out[0], l = out[out.length - 1];
+    if((f.x - l.x) ** 2 + (f.y - l.y) ** 2 < t2) out.pop();
+  }
+  return out;
+}
+
+function buildPrefs(gj){
+  const feats = gj && gj.type === "FeatureCollection" ? (gj.features || [])
+              : gj && gj.type === "Feature" ? [gj] : [];
+  const raw = new Map();
+
+  for(const f of feats){
+    const name = normalizeName(f.properties || {});
+    if(!name) continue;
+    const rings = [];
+    collectRings(f.geometry, rings);
+    if(!rings.length) continue;
+    let arr = raw.get(name);
+    if(!arr){ arr = []; raw.set(name, arr); }
+    for(const r of rings){
+      const pr = decimate(projectRing(r));
+      if(pr.length >= 4) arr.push(pr);
+    }
+  }
+
+  const out = new Map();
+  for(const [name, rings] of raw){
+    const infos = rings.map(r => ({ r, a: Math.abs(ringArea(r)), c: ringCentroid(r) }));
+    let maxA = 0;
+    for(const it of infos) if(it.a > maxA) maxA = it.a;
+    if(maxA <= 0) continue;
+
+    const kept = [];
+    for(const it of infos){
+      if(it.a < maxA * 0.03) continue;                       // 小さすぎる島は除外
+      if(it.c.x < BX0 || it.c.x > BX1) continue;             // 範囲外（南鳥島など）
+      if(it.c.y < BY0 || it.c.y > BY1) continue;
+      kept.push(it.r);
+    }
+    if(!kept.length) continue;
+
+    let area = 0;
+    for(const r of kept) area += Math.abs(ringArea(r));
+    const bbox = bboxOfRings(kept);
+    out.set(name, { name, rings: kept, bbox, area });
+  }
+  return out;
+}
+
+async function fetchJSON(url, ms){
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms || 20000);
+  try{
+    const res = await fetch(url, { signal: ctrl.signal });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* =========================================================
+   見本（描画ボード用のガイド）パス
+   ========================================================= */
+function buildHintPath(){
+  const pref = state.prefs.get(state.current);
+  if(!pref) return null;
+
+  const key = state.current + "|" + W + "x" + H;
+  if(hintCache && hintCache.key === key) return hintCache.path;
+
+  const bb = pref.bbox;
+  const w = Math.max(1e-9, bb.maxX - bb.minX);
+  const h = Math.max(1e-9, bb.maxY - bb.minY);
+  const pad = 46;
+  const s = Math.min((W - pad * 2) / w, (H - pad * 2) / h) * 0.82;
+  if(!isFinite(s) || s <= 0) return null;
+
+  const ox = W / 2 - (bb.minX + w / 2) * s;
+  const oy = H / 2 - (bb.minY + h / 2) * s;
+
+  const path = new Path2D();
+  for(const ring of pref.rings){
+    if(ring.length < 3) continue;
+    path.moveTo(ring[0].x * s + ox, ring[0].y * s + oy);
+    for(let i = 1; i < ring.length; i++){
+      path.lineTo(ring[i].x * s + ox, ring[i].y * s + oy);
+    }
+    path.closePath();
+  }
+
+  hintCache = { key, path };
+  return path;
+}
+
+/* =========================================================
+   ビュー（フィット + ズーム / パン）
+   ========================================================= */
+function computeBase(){
+  const bb = state.fitBBox || state.mapBBox;
+  if(!bb) return;
+  const pad = 26;
+  const w = Math.max(1e-9, bb.maxX - bb.minX);
+  const h = Math.max(1e-9, bb.maxY - bb.minY);
+  let s = Math.min((W - pad * 2) / w, (H - pad * 2) / h);
+  if(!isFinite(s) || s <= 0) s = 1;
+  state.base = {
+    s,
+    ox: (W - w * s) / 2 - bb.minX * s,
+    oy: (H - h * s) / 2 - bb.minY * s
+  };
+}
+
+function recomputeView(){
+  const b = state.base, z = state.zoom;
+  state.view = {
+    s: b.s * z,
+    ox: (b.ox - W / 2) * z + W / 2 + state.pan.x,
+    oy: (b.oy - H / 2) * z + H / 2 + state.pan.y
+  };
+}
+
+/* 地図が画面から完全に外れないようにパンを制限 */
+function clampView(){
+  const bb = state.mapBBox;
+  if(!bb) return;
+  const m = 70;
+  const v = state.view;
+  const x0 = bb.minX * v.s + v.ox, x1 = bb.maxX * v.s + v.ox;
+  const y0 = bb.minY * v.s + v.oy, y1 = bb.maxY * v.s + v.oy;
+  let dx = 0, dy = 0;
+  if(x1 < m) dx = m - x1;
+  else if(x0 > W - m) dx = (W - m) - x0;
+  if(y1 < m) dy = m - y1;
+  else if(y0 > H - m) dy = (H - m) - y0;
+  if(dx || dy){
+    state.pan.x += dx;
+    state.pan.y += dy;
+    recomputeView();
+  }
+}
+
+function updateView(){
+  recomputeView();
+  clampView();
+  viewDirty = true;
+}
+
+/* フィットし直し + ズームリセット */
+function applyView(){
+  computeBase();
+  state.zoom = 1;
+  state.pan.x = 0;
+  state.pan.y = 0;
+  updateView();
+}
+
+/* 指定画面座標を中心に拡大縮小 */
+function zoomAt(sx, sy, factor){
+  const nz = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, state.zoom * factor));
+  if(Math.abs(nz - state.zoom) < 1e-6) return false;
+  const v = state.view;
+  const wx = (sx - v.ox) / v.s;
+  const wy = (sy - v.oy) / v.s;
+
+  state.zoom = nz;
+  updateView();
+
+  const v2 = state.view;
+  state.pan.x += sx - (wx * v2.s + v2.ox);
+  state.pan.y += sy - (wy * v2.s + v2.oy);
+  updateView();
+  return true;
+}
+
+/* =========================================================
+   キャッシュ構築
+   ========================================================= */
+function buildMapCache(){
+  mapCache = document.createElement("canvas");
+  mapCache.width = Math.max(1, Math.round(W * DPR));
+  mapCache.height = Math.max(1, Math.round(H * DPR));
+  const g = mapCache.getContext("2d");
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  g.clearRect(0, 0, W, H);
+
+  const v = state.view;
+  const path = new Path2D();
+  for(const pref of state.prefs.values()){
+    for(const ring of pref.rings){
+      if(ring.length < 3) continue;
+      path.moveTo(ring[0].x * v.s + v.ox, ring[0].y * v.s + v.oy);
+      for(let i = 1; i < ring.length; i++){
+        path.lineTo(ring[i].x * v.s + v.ox, ring[i].y * v.s + v.oy);
+      }
+      path.closePath();
+    }
+  }
+
+  g.lineJoin = "round";
+  g.lineWidth = 2.6;
+  g.strokeStyle = "#a9bed6";
+  g.stroke(path);
+
+  g.fillStyle = "#dde9f6";
+  g.fill(path);
+}
+
+/* =========================================================
+   描画
+   ========================================================= */
+function s2w(sx, sy){
+  return { x: (sx - state.view.ox) / state.view.s, y: (sy - state.view.oy) / state.view.s };
+}
+
+function render(){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if(!state.loaded) return;
+
+  if(state.mode === "draw"){ renderBoard(); return; }
+
+  if(viewDirty){ buildMapCache(); viewDirty = false; }
+  if(mapCache) ctx.drawImage(mapCache, 0, 0, W, H);
+
+  if(state.mode === "result") renderTruth();
+  renderUserShape();
+}
+
+function scheduleRender(){
+  if(rafId) return;
+  rafId = requestAnimationFrame(() => { rafId = 0; render(); });
+}
+
+/* ボード上にポリゴンを描く */
+function drawBoardPoly(pts, alpha){
+  if(pts.length < 3) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for(let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(37,99,235," + alpha + ")";
+  ctx.fill();
+  ctx.strokeStyle = "#2563eb";
+  ctx.lineWidth = 2.4;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+}
+
+function renderBoard(){
+  ctx.fillStyle = "#fbfdff";
+  ctx.fillRect(0, 0, W, H);
+
+  const g = 44;
+  ctx.strokeStyle = "#eef3f9";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for(let x = g; x < W; x += g){ ctx.moveTo(x + .5, 0); ctx.lineTo(x + .5, H); }
+  for(let y = g; y < H; y += g){ ctx.moveTo(0, y + .5); ctx.lineTo(W, y + .5); }
+  ctx.stroke();
+
+  /* 見本（見本地図）— 初期は非表示 */
+  if(state.showHint){
+    const hp = buildHintPath();
+    if(hp){
+      ctx.save();
+      ctx.fillStyle = "rgba(16,185,129,.10)";
+      ctx.fill(hp);
+      ctx.strokeStyle = "rgba(5,150,105,.60)";
+      ctx.lineWidth = 1.8;
+      ctx.lineJoin = "round";
+      ctx.setLineDash([7, 5]);
+      ctx.stroke(hp);
+      ctx.restore();
+    }
+  }
+
+  /* 確定済みの閉領域（半透明の塗りつぶし）— 新しく描いても消えない */
+  for(const poly of state.polys){
+    drawBoardPoly(poly.pts, 0.14);
+  }
+
+  /* 描画中のストローク */
+  if(state.stroke && state.stroke.length > 1){
+    const pts = state.stroke;
+    const closing = nearStart(pts);
+
+    if(closing){
+      /* 始点付近に戻ってきたら、閉じた塗りつぶしをプレビュー */
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for(let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(37,99,235,.10)";
+      ctx.fill();
+    } else if(pts.length >= 6){
+      /* 閉じるヒント（破線） */
+      const f = pts[0], l = pts[pts.length - 1];
+      ctx.beginPath();
+      ctx.moveTo(l.x, l.y);
+      ctx.lineTo(f.x, f.y);
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = "rgba(37,99,235,.35)";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    /* ストローク本体 */
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2.6;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+}
+
+function renderTruth(){
+  const pref = state.prefs.get(state.current);
+  if(!pref) return;
+  const v = state.view;
+  ctx.beginPath();
+  for(const ring of pref.rings){
+    if(ring.length < 3) continue;
+    ctx.moveTo(ring[0].x * v.s + v.ox, ring[0].y * v.s + v.oy);
+    for(let i = 1; i < ring.length; i++){
+      ctx.lineTo(ring[i].x * v.s + v.ox, ring[i].y * v.s + v.oy);
+    }
+    ctx.closePath();
+  }
+  ctx.fillStyle = "rgba(16,185,129,.34)";
+  ctx.fill();
+  ctx.strokeStyle = "#059669";
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+}
+
+function renderUserShape(){
+  const rings = userWorldRings();
+  if(!rings.length) return;
+  const v = state.view;
+  ctx.beginPath();
+  for(const ring of rings){
+    if(ring.length < 3) continue;
+    ctx.moveTo(ring[0].x * v.s + v.ox, ring[0].y * v.s + v.oy);
+    for(let i = 1; i < ring.length; i++){
+      ctx.lineTo(ring[i].x * v.s + v.ox, ring[i].y * v.s + v.oy);
+    }
+    ctx.closePath();
+  }
+  ctx.fillStyle = "rgba(239,68,68,.26)";
+  ctx.fill();
+  ctx.strokeStyle = "#ef4444";
+  ctx.lineWidth = 2.4;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+}
+
+/* =========================================================
+   採点（ラスタ IoU）
+   ========================================================= */
+function rasterize(rings, N){
+  const c = document.createElement("canvas");
+  c.width = N; c.height = N;
+  const g = c.getContext("2d");
+  g.fillStyle = "#000";
+  g.beginPath();
+  for(const ring of rings){
+    if(ring.length < 3) continue;
+    g.moveTo(ring[0][0], ring[0][1]);
+    for(let i = 1; i < ring.length; i++) g.lineTo(ring[i][0], ring[i][1]);
+    g.closePath();
+  }
+  g.fill("nonzero");
+  const d = g.getImageData(0, 0, N, N).data;
+  const mask = new Uint8Array(N * N);
+  for(let i = 0; i < N * N; i++) mask[i] = d[i * 4 + 3] > 127 ? 1 : 0;
+  return mask;
+}
+
+function computeIoU(prefRings, userRings){
+  const pb = bboxOfRings(prefRings);
+  const ub = bboxOfRings(userRings);
+  const minX = Math.min(pb.minX, ub.minX);
+  const minY = Math.min(pb.minY, ub.minY);
+  const maxX = Math.max(pb.maxX, ub.maxX);
+  const maxY = Math.max(pb.maxY, ub.maxY);
+
+  const size = Math.max(maxX - minX, maxY - minY) * 1.08;
+  if(!(size > 0)) return 0;
+
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const ox = cx - size / 2, oy = cy - size / 2;
+  const N = 300;
+  const k = N / size;
+
+  const A = rasterize(prefRings.map(r => r.map(p => [(p.x - ox) * k, (p.y - oy) * k])), N);
+  const B = rasterize(userRings.map(r => r.map(p => [(p.x - ox) * k, (p.y - oy) * k])), N);
+
+  let inter = 0, uni = 0;
+  for(let i = 0; i < A.length; i++){
+    const a = A[i], b = B[i];
+    if(a && b) inter++;
+    if(a || b) uni++;
+  }
+  return uni ? inter / uni : 0;
+}
+
+/* =========================================================
+   フロー
+   ========================================================= */
+function resetFor(name){
+  state.current = name;
+  state.mode = "draw";
+  state.polys = [];
+  state.stroke = null;
+  state.scale = 1;
+  state.placed = { x: 0, y: 0 };
+  state.score = 0;
+  state.fitBBox = null;
+  gesture = null;
+  pointers.clear();
+
+  const sel = document.getElementById("prefSel");
+  if(sel) sel.value = name;
+
+  applyView();
+  updateUI();
+  scheduleRender();
+}
+
+function randomPref(){
+  const names = Array.from(state.prefs.keys());
+  if(names.length <= 1) return names[0];
+  let n;
+  do { n = names[Math.floor(Math.random() * names.length)]; } while(n === state.current);
+  return n;
+}
+
+function goPlace(){
+  const comb = combinedShape();
+  if(!comb) return;
+  const pref = state.prefs.get(state.current);
+  if(!pref) return;
+  const s = Math.sqrt(pref.area / comb.area);
+  state.scale = (isFinite(s) && s > 0) ? s : 1;
+  const b = state.mapBBox;
+  state.placed = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+  state.mode = "place";
+  state.zoom = 1;
+  state.pan.x = 0;
+  state.pan.y = 0;
+  updateView();
+  updateUI();
+  scheduleRender();
+}
+
+function grade(){
+  const pref = state.prefs.get(state.current);
+  const rings = userWorldRings();
+  if(!pref || !rings.length) return;
+
+  state.score = computeIoU(pref.rings, rings);
+  state.mode = "result";
+
+  const pb = pref.bbox;
+  const ub = bboxOfRings(rings);
+  const bb = {
+    minX: Math.min(pb.minX, ub.minX),
+    minY: Math.min(pb.minY, ub.minY),
+    maxX: Math.max(pb.maxX, ub.maxX),
+    maxY: Math.max(pb.maxY, ub.maxY)
+  };
+  const pw = (bb.maxX - bb.minX) * 0.14 + 1e-6;
+  const ph = (bb.maxY - bb.minY) * 0.14 + 1e-6;
+  bb.minX -= pw; bb.maxX += pw; bb.minY -= ph; bb.maxY += ph;
+  state.fitBBox = bb;
+
+  applyView();
+  updateUI();
+  scheduleRender();
+}
+
+function scoreMessage(p){
+  if(p >= 80) return "🏆 完璧！";
+  if(p >= 65) return "🎉 すばらしい！";
+  if(p >= 50) return "👍 いい線いってる";
+  if(p >= 35) return "🙂 まあまあ";
+  if(p >= 20) return "😅 もう少し";
+  return "😵 ざんねん…";
+}
+
+function updateUI(){
+  const m = state.mode;
+  const el = id => document.getElementById(id);
+  const hasPoly = state.polys.length > 0;
+
+  el("btnClear").hidden = m !== "draw";
+  el("btnPlace").hidden = m !== "draw";
+  el("btnPlace").disabled = !hasPoly;
+  el("btnBack").hidden = m !== "place";
+  el("btnGrade").hidden = m !== "place";
+  el("btnNext").hidden = m !== "result";
+
+  el("target").innerHTML = state.current
+    ? "<small>お題</small>" + state.current
+    : "";
+
+  el("zoomCtl").hidden = (m === "draw");
+  CV.style.cursor = (m === "draw") ? "crosshair" : "grab";
+
+  const hintBtn = el("btnHint");
+  hintBtn.setAttribute("aria-pressed", state.showHint ? "true" : "false");
+  hintBtn.textContent = state.showHint ? "見本 ON" : "見本 OFF";
+
+  const hint = el("hint");
+  if(m === "draw"){
+    if(state.polys.length){
+      hint.textContent = "続けて描き足せます／「この形で配置」へ";
+    } else if(state.showHint){
+      hint.textContent = "見本を見ながら線を引いて、始点に戻ると閉じます";
+    } else {
+      hint.textContent = (state.current || "") + " の形を描いて、始点に戻ると閉じます";
+    }
+  } else if(m === "place"){
+    hint.textContent = "ドラッグで移動 ／ ホイール・ピンチで拡大縮小";
+  } else {
+    const pct = Math.round(state.score * 100);
+    hint.textContent = "一致度 " + pct + "%　" + scoreMessage(pct);
+  }
+}
+
+/* =========================================================
+   入力（描画 / 移動 / パン / ピンチズーム）
+   ========================================================= */
+function canvasPos(e){
+  const r = CV.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+
+function startPinch(){
+  const pts = Array.from(pointers.values());
+  if(pts.length < 2) return;
+  const a = pts[0], b = pts[1];
+  gesture = {
+    type: "pinch",
+    dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+    mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+  };
+  CV.style.cursor = "grabbing";
+}
+
+function onDown(e){
+  if(!state.loaded) return;
+  if(e.pointerType === "mouse" && e.button !== 0) return;
+  const p = canvasPos(e);
+  pointers.set(e.pointerId, p);
+
+  if(state.mode === "draw"){
+    e.preventDefault();
+    try{ CV.setPointerCapture(e.pointerId); }catch(_){}
+    if(pointers.size > 1) return;       // 描画中はマルチタッチ無視
+    state.stroke = [p];                 // 新しいストローク開始（既存ポリゴンは保持）
+    updateUI();
+    scheduleRender();
+    return;
+  }
+
+  /* place / result */
+  e.preventDefault();
+  try{ CV.setPointerCapture(e.pointerId); }catch(_){}
+
+  if(pointers.size === 2){ startPinch(); return; }
+  if(pointers.size > 2) return;
+
+  if(state.mode === "place"){
+    if(pointInUserShape(p.x, p.y)){
+      const w = s2w(p.x, p.y);
+      gesture = { type: "shape", dx: state.placed.x - w.x, dy: state.placed.y - w.y };
+      CV.style.cursor = "grabbing";
+      return;
+    }
+  }
+
+  gesture = { type: "pan", sx: p.x, sy: p.y, panX: state.pan.x, panY: state.pan.y };
+  CV.style.cursor = "grabbing";
+}
+
+function onMove(e){
+  if(!state.loaded) return;
+  if(pointers.has(e.pointerId)) pointers.set(e.pointerId, canvasPos(e));
+  const p = canvasPos(e);
+
+  if(state.mode === "draw"){
+    if(state.stroke && pointers.size === 1){
+      e.preventDefault();
+      const last = state.stroke[state.stroke.length - 1];
+      const dx = p.x - last.x, dy = p.y - last.y;
+      if(dx * dx + dy * dy >= 4){
+        state.stroke.push(p);
+        scheduleRender();
+      }
+    }
+    return;
+  }
+
+  if(!gesture) return;
+  e.preventDefault();
+
+  if(gesture.type === "pinch"){
+    const pts = Array.from(pointers.values());
+    if(pts.length < 2) return;
+    const a = pts[0], b = pts[1];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+
+    state.pan.x += mid.x - gesture.mid.x;
+    state.pan.y += mid.y - gesture.mid.y;
+    updateView();
+
+    const factor = dist / (gesture.dist || 1);
+    if(Math.abs(factor - 1) > 1e-4) zoomAt(mid.x, mid.y, factor);
+
+    gesture.dist = dist;
+    gesture.mid = mid;
+    scheduleRender();
+    return;
+  }
+
+  if(gesture.type === "pan"){
+    state.pan.x = gesture.panX + (p.x - gesture.sx);
+    state.pan.y = gesture.panY + (p.y - gesture.sy);
+    updateView();
+    scheduleRender();
+    return;
+  }
+
+  if(gesture.type === "shape"){
+    const w = s2w(p.x, p.y);
+    state.placed.x = w.x + gesture.dx;
+    state.placed.y = w.y + gesture.dy;
+    scheduleRender();
+  }
+}
+
+function onUp(e){
+  if(!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+
+  if(state.mode === "draw"){
+    if(state.stroke) finishStroke();
+    gesture = null;
+    return;
+  }
+
+  if(pointers.size === 0){
+    gesture = null;
+    CV.style.cursor = "grab";
+  } else if(pointers.size === 1){
+    const p = Array.from(pointers.values())[0];
+    gesture = { type: "pan", sx: p.x, sy: p.y, panX: state.pan.x, panY: state.pan.y };
+    CV.style.cursor = "grabbing";
+  } else {
+    startPinch();
+  }
+}
+
+/* ストロークを確定。閉じていればポリゴンとして追加 */
+function finishStroke(){
+  const pts = state.stroke;
+  state.stroke = null;
+  if(!pts || pts.length < 6){ scheduleRender(); updateUI(); return; }
+
+  const area = Math.abs(ringArea(pts));
+  const closed = nearStart(pts);
+
+  /* 始点付近で閉じた、または十分大きければ自動で閉じる */
+  const auto = area >= AUTO_CLOSE_AREA && pts.length >= AUTO_CLOSE_MIN_PTS;
+  if(!closed && !auto){ scheduleRender(); updateUI(); return; }
+  if(area < MIN_POLY_AREA){ scheduleRender(); updateUI(); return; }
+
+  state.polys.push({ pts, area, centroid: ringCentroid(pts) });
+  updateUI();
+  scheduleRender();
+}
+
+/* ホイール / トラックパッド */
+CV.addEventListener("wheel", e => {
+  if(!state.loaded || state.mode === "draw") return;
+  e.preventDefault();
+  const p = canvasPos(e);
+  const dy = (e.deltaMode === 1) ? e.deltaY * 16 : e.deltaY;
+  const factor = Math.exp(-dy * 0.0018);
+  if(zoomAt(p.x, p.y, factor)) scheduleRender();
+}, { passive: false });
+
+/* ズームボタン */
+function zoomCenter(factor){
+  if(zoomAt(W / 2, H / 2, factor)) scheduleRender();
+}
+document.getElementById("zIn").addEventListener("click", () => zoomCenter(1.4));
+document.getElementById("zOut").addEventListener("click", () => zoomCenter(1 / 1.4));
+document.getElementById("zReset").addEventListener("click", () => {
+  state.zoom = 1;
+  state.pan.x = 0;
+  state.pan.y = 0;
+  updateView();
+  scheduleRender();
+});
+
+/* 見本 ON/OFF 切替 */
+document.getElementById("btnHint").addEventListener("click", () => {
+  state.showHint = !state.showHint;
+  updateUI();
+  scheduleRender();
+});
+
+/* =========================================================
+   リサイズ
+   ========================================================= */
+function resize(){
+  const r = CV.parentElement.getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(1, Math.floor(r.width));
+  H = Math.max(1, Math.floor(r.height));
+  CV.width = Math.round(W * DPR);
+  CV.height = Math.round(H * DPR);
+  CV.style.width = W + "px";
+  CV.style.height = H + "px";
+  if(state.loaded){
+    computeBase();
+    updateView();          // ズーム・パンは維持
+    scheduleRender();
+  }
+}
+
+/* =========================================================
+   起動
+   ========================================================= */
+async function boot(){
+  const loadingTxt = document.getElementById("loadingTxt");
+
+  let prefs = null;
+  for(const url of SOURCES){
+    try{
+      const gj = await fetchJSON(url, 20000);
+      const p = buildPrefs(gj);
+      if(p.size >= 40){ prefs = p; break; }
+    }catch(err){
+      console.warn("[geo] failed:", url, err);
+    }
+  }
+
+  if(!prefs){
+    loadingTxt.innerHTML =
+      "地図データを取得できませんでした。<br>インターネット接続を確認して再読み込みしてください。";
+    const sp = document.querySelector(".spin");
+    if(sp) sp.style.display = "none";
+    return;
+  }
+
+  state.prefs = prefs;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for(const p of prefs.values()){
+    minX = Math.min(minX, p.bbox.minX);
+    minY = Math.min(minY, p.bbox.minY);
+    maxX = Math.max(maxX, p.bbox.maxX);
+    maxY = Math.max(maxY, p.bbox.maxY);
+  }
+  state.mapBBox = { minX, minY, maxX, maxY };
+
+  const sel = document.getElementById("prefSel");
+  sel.innerHTML = "";
+  for(const name of PREFS){
+    if(!prefs.has(name)) continue;
+    const o = document.createElement("option");
+    o.value = name;
+    o.textContent = name;
+    sel.appendChild(o);
+  }
+
+  state.loaded = true;
+  document.getElementById("loading").remove();
+
+  resize();
+  resetFor(randomPref());
+}
+
+/* =========================================================
+   イベント登録
+   ========================================================= */
+CV.addEventListener("pointerdown", onDown);
+CV.addEventListener("pointermove", onMove);
+CV.addEventListener("pointerup", onUp);
+CV.addEventListener("pointercancel", onUp);
+window.addEventListener("pointerup", onUp);
+window.addEventListener("pointercancel", onUp);
+
+document.getElementById("btnClear").addEventListener("click", () => {
+  state.polys = [];
+  state.stroke = null;
+  updateUI();
+  scheduleRender();
+});
+
+document.getElementById("btnPlace").addEventListener("click", goPlace);
+document.getElementById("btnGrade").addEventListener("click", grade);
+
+document.getElementById("btnBack").addEventListener("click", () => {
+  state.mode = "draw";
+  state.fitBBox = null;
+  gesture = null;
+  pointers.clear();
+  applyView();
+  updateUI();
+  scheduleRender();
+});
+
+document.getElementById("btnNext").addEventListener("click", () => {
+  state.fitBBox = null;
+  resetFor(randomPref());
+});
+
+document.getElementById("btnRandom").addEventListener("click", () => {
+  if(!state.loaded) return;
+  resetFor(randomPref());
+});
+
+document.getElementById("prefSel").addEventListener("change", e => {
+  if(!state.loaded) return;
+  resetFor(e.target.value);
+});
+
+if(window.ResizeObserver){
+  new ResizeObserver(() => resize()).observe(CV.parentElement);
+}else{
+  window.addEventListener("resize", resize);
+}
+
+boot();
+
+})();
+</script>
+</body>
+</html>
