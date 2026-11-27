@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>県境あてチャレンジ</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+    background:#f1f5f9;color:#0f172a;
+  }
+  #app{display:flex;flex-direction:column;height:100dvh;max-width:1200px;margin:0 auto}
+  header{
+    display:flex;align-items:center;gap:8px;padding:8px 12px;
+    background:#fff;border-bottom:1px solid #e2e8f0;flex-wrap:wrap
+  }
+  header h1{font-size:15px;margin:0;font-weight:800;letter-spacing:.02em;white-space:nowrap}
+  .grow{flex:1}
+  .tabs{
+    display:flex;background:#eef2f7;border-radius:9px;padding:3px;gap:2px
+  }
+  .tab{
+    font:inherit;font-size:12px;font-weight:700;padding:6px 13px;border-radius:7px;
+    border:none;background:transparent;color:#64748b;cursor:pointer;white-space:nowrap;
+    transition:background .15s,color .15s,box-shadow .15s;margin:0
+  }
+  .tab:hover:not(.active){color:#334155}
+  .tab.active{background:#fff;color:#0f172a;box-shadow:0 1px 3px rgba(15,23,42,.12)}
+  select{
+    font:inherit;font-size:13px;padding:6px 9px;border-radius:8px;
+    border:1px solid #cbd5e1;background:#fff;color:inherit;max-width:180px
+  }
+  .stage{position:relative;flex:1;min-height:0;background:#fff;overflow:hidden}
+  canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+  .hint{
+    position:absolute;left:50%;bottom:14px;transform:translateX(-50%);
+    background:rgba(255,255,255,.96);border:1px solid #e2e8f0;border-radius:999px;
+    padding:8px 18px;font-size:13px;font-weight:700;color:#334155;
+    box-shadow:0 4px 16px rgba(15,23,42,.1);pointer-events:none;white-space:nowrap;
+    max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;
+    transition:transform .2s, background .2s;
+  }
+  .hint.result-badge{
+    font-size:14px;padding:10px 18px;border-color:#cbd5e1;color:#0f172a;
+    border-radius:16px;white-space:normal;text-align:left;line-height:1.55;
+    box-shadow:0 6px 20px rgba(15,23,42,.15);
+  }
+  .zoomctl{
+    position:absolute;right:12px;top:12px;z-index:5;
+    display:flex;flex-direction:column;gap:6px
+  }
+  .zoomctl button{
+    width:40px;height:40px;padding:0;margin:0;border-radius:11px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:18px;font-weight:700;line-height:1;color:#334155;
+    background:rgba(255,255,255,.95);border:1px solid #e2e8f0;
+    box-shadow:0 3px 12px rgba(15,23,42,.14)
+  }
+  .zoomctl button:hover:not(:disabled){background:#fff;border-color:#94a3b8}
+  .shapectl{
+    position:absolute;left:12px;top:12px;z-index:5;
+    display:flex;flex-direction:column;gap:6px;
+    background:rgba(255,255,255,.92);padding:6px;border-radius:12px;
+    border:1px solid #e2e8f0;box-shadow:0 3px 12px rgba(15,23,42,.1)
+  }
+  .shapectl span{font-size:10px;font-weight:700;color:#64748b;text-align:center}
+  .shapectl-row{display:flex;gap:4px}
+  .shapectl button{
+    width:34px;height:34px;padding:0;margin:0;border-radius:8px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:16px;font-weight:700;color:#ef4444;background:#fef2f2;border-color:#fecaca
+  }
+  .shapectl button:hover{background:#fee2e2}
+  .legend{
+    position:absolute;left:12px;top:12px;z-index:5;
+    display:flex;flex-direction:column;gap:5px;
+    background:rgba(255,255,255,.94);padding:8px 12px;border-radius:10px;
+    border:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#334155;
+    box-shadow:0 2px 10px rgba(15,23,42,.08);pointer-events:none
+  }
+  .legend-item{display:flex;align-items:center;gap:6px}
+  .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .stage-loading{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;background:rgba(255,255,255,.94);z-index:20;
+    font-size:13px;color:#475569;text-align:center;padding:20px;line-height:1.6
+  }
+  .stage-loading .err{color:#b91c1c;font-weight:700;font-size:14px}
+  .stage-loading .retry{
+    font:inherit;font-size:13px;font-weight:700;padding:8px 16px;border-radius:9px;
+    border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer
+  }
+  .stage-loading .retry:hover{background:#f8fafc;border-color:#94a3b8}
+  footer{
+    display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;
+    border-top:1px solid #e2e8f0;flex-wrap:wrap
+  }
+  #target{font-size:15px;font-weight:800;min-height:20px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #target small{font-weight:700;color:#64748b;font-size:11px;margin-right:6px;background:#f1f5f9;padding:3px 7px;border-radius:5px}
+  .btns{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+  button{
+    font:inherit;font-size:13px;font-weight:700;padding:9px 14px;border-radius:10px;
+    border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer;
+    transition:background .15s,border-color .15s,transform .1s;white-space:nowrap
+  }
+  button:active:not(:disabled){transform:scale(.97)}
+  button:hover:not(:disabled){background:#f8fafc;border-color:#94a3b8}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.primary{background:#2563eb;border-color:#2563eb;color:#fff}
+  button.primary:hover:not(:disabled){background:#1d4ed8;border-color:#1d4ed8}
+  #btnHint[aria-pressed="true"]{background:#ecfdf5;border-color:#10b981;color:#047857}
+  #btnHint[aria-pressed="true"]:hover{background:#d1fae5}
+  [hidden]{display:none!important}
+  #loading{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:16px;background:#f1f5f9;z-index:50;font-size:14px;color:#475569;
+    padding:24px;text-align:center;line-height:1.7
+  }
+  .spin{width:30px;height:30px;border:3px solid #cbd5e1;border-top-color:#2563eb;border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media (max-width:600px){
+    header h1{display:none}
+    .tab{font-size:11px;padding:5px 9px}
+    select{font-size:12px;max-width:125px;padding:5px 6px}
+    button{font-size:12px;padding:8px 11px}
+    #target{font-size:13px}
+  }
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spin"></div><div id="loadingTxt">地図データを読み込み中…</div></div>
+
+<div id="app">
+  <header>
+    <h1>🗾 県境あて</h1>
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="pref">都道府県境</button>
+      <button class="tab" data-tab="muni">市区町村境</button>
+    </div>
+    <div class="grow"></div>
+    <select id="prefSel" aria-label="都道府県を選択"></select>
+    <select id="muniSel" aria-label="市区町村を選択" hidden></select>
+    <button id="btnHint" aria-pressed="false" title="描くときの見本を表示／非表示">見本 OFF</button>
+    <button id="btnRandom">🎲 ランダム</button>
+  </header>
+
+  <div class="stage">
+    <canvas id="cv"></canvas>
+    <div class="hint" id="hint"></div>
+    
+    <!-- 配置フェーズ用の図形サイズ調整UI -->
+    <div class="shapectl" id="shapeCtl" hidden>
+      <span>描いた形の大きさ</span>
+      <div class="shapectl-row">
+        <button id="sDown" title="形を小さくする">−</button>
+        <button id="sUp" title="形を大きくする">＋</button>
+      </div>
+    </div>
+
+    <!-- 結果フェーズ用の凡例 -->
+    <div class="legend" id="legend" hidden>
+      <div class="legend-item"><span class="dot" style="background:rgba(16,185,129,.45);border:1.5px solid #059669"></span>正解の境界</div>
+      <div class="legend-item"><span class="dot" style="background:rgba(239,68,68,.35);border:1.5px solid #ef4444"></span>あなたの回答</div>
+    </div>
+
+    <div class="zoomctl" id="zoomCtl">
+      <button id="zIn" title="拡大" aria-label="拡大">＋</button>
+      <button id="zOut" title="縮小" aria-label="縮小">−</button>
+      <button id="zReset" title="全体表示" aria-label="全体表示">⤾</button>
+    </div>
+    <div class="stage-loading" id="stageLoading" hidden>
+      <div class="spin" id="stageSpin"></div>
+      <div id="stageLoadingTxt">読み込み中…</div>
+      <button class="retry" id="stageRetry" hidden>再試行</button>
+    </div>
+  </div>
+
+  <footer>
+    <div id="target"></div>
+    <div class="btns">
+      <button id="btnUndo" title="直前の線を消す">↩ 1つ戻す</button>
+      <button id="btnClear">クリア</button>
+      <button id="btnPlace" class="primary">この形で配置 →</button>
+      <button id="btnBack">← 描き直す</button>
+      <button id="btnGrade" class="primary">決定して採点</button>
+      <button id="btnNext" class="primary">次の都道府県 →</button>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   定数
+   ========================================================= */
+const DEG = Math.PI / 180;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 18;
+const CLOSE_DIST = 40;
+const MIN_POLY_AREA = 0.5;
+const MIN_POLY_PTS = 3;
+
+const PREFS = [
+  "北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県",
+  "茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県",
+  "新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県",
+  "三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県",
+  "鳥取県","島根県","岡山県","広島県","山口県",
+  "徳島県","香川県","愛媛県","高知県",
+  "福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"
+];
+
+const PREF_CODE = {
+  "北海道":"01","青森県":"02","岩手県":"03","宮城県":"04","秋田県":"05",
+  "山形県":"06","福島県":"07","茨城県":"08","栃木県":"09","群馬県":"10",
+  "埼玉県":"11","千葉県":"12","東京都":"13","神奈川県":"14","新潟県":"15",
+  "富山県":"16","石川県":"17","福井県":"18","山梨県":"19","長野県":"20",
+  "岐阜県":"21","静岡県":"22","愛知県":"23","三重県":"24","滋賀県":"25",
+  "京都府":"26","大阪府":"27","兵庫県":"28","奈良県":"29","和歌山県":"30",
+  "鳥取県":"31","島根県":"32","岡山県":"33","広島県":"34","山口県":"35",
+  "徳島県":"36","香川県":"37","愛媛県":"38","高知県":"39","福岡県":"40",
+  "佐賀県":"41","長崎県":"42","熊本県":"43","大分県":"44","宮崎県":"45",
+  "鹿児島県":"46","沖縄県":"47"
+};
+
+const ROMAJI = {
+  hokkaido:"北海道", aomori:"青森県", iwate:"岩手県", miyagi:"宮城県", akita:"秋田県",
+  yamagata:"山形県", fukushima:"福島県", ibaraki:"茨城県", tochigi:"栃木県", gunma:"群馬県",
+  saitama:"埼玉県", chiba:"千葉県", tokyo:"東京都", kanagawa:"神奈川県", niigata:"新潟県",
+  toyama:"富山県", ishikawa:"石川県", fukui:"福井県", yamanashi:"山梨県", nagano:"長野県",
+  gifu:"岐阜県", shizuoka:"静岡県", aichi:"愛知県", mie:"三重県", shiga:"滋賀県",
+  kyoto:"京都府", osaka:"大阪府", hyogo:"兵庫県", nara:"奈良県", wakayama:"和歌山県",
+  tottori:"鳥取県", shimane:"島根県", okayama:"岡山県", hiroshima:"広島県", yamaguchi:"山口県",
+  tokushima:"徳島県", kagawa:"香川県", ehime:"愛媛県", kochi:"高知県", fukuoka:"福岡県",
+  saga:"佐賀県", nagasaki:"長崎県", kumamoto:"熊本県", oita:"大分県", miyazaki:"宮崎県",
+  kagoshima:"鹿児島県", okinawa:"沖縄県"
+};
+
+const BASE_NAMES = PREFS.map(p => p.replace(/[都府県]$/, ""));
+
+const BX0 = 122.5 * DEG, BX1 = 146.5 * DEG;
+const BY0 = projLat(46), BY1 = projLat(24);
+
+const SOURCES = [
+  "https://cdn.jsdelivr.net/gh/dataofjapan/land@master/japan.geojson",
+  "https://raw.githubusercontent.com/dataofjapan/land/master/japan.geojson",
+  "https://geolonia.github.io/japanese-prefectures/prefectures.json",
+  "https://raw.githubusercontent.com/geolonia/japanese-prefectures/master/prefectures.json"
+];
+
+function MUNI_URLS(code){
+  const base = "data/municipality/geojson/s0010/N03-21_" + code + "_210101";
+  return [
+    "https://cdn.jsdelivr.net/gh/smartnews-smri/japan-topography@main/" + base + ".json",
+    "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/" + base + ".json",
+    "https://raw.githubusercontent.com/smartnews-smri/japan-topography/master/" + base + ".json",
+    "https://cdn.jsdelivr.net/gh/smartnews-smri/japan-topography@main/" + base + ".geojson",
+    "https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/" + base + ".geojson"
+  ];
+}
+
+/* =========================================================
+   投影
+   ========================================================= */
+function projLon(lon){ return lon * DEG; }
+function projLat(lat){
+  lat = Math.max(-85, Math.min(85, lat));
+  return -Math.log(Math.tan(Math.PI / 4 + lat * DEG / 2));
+}
+
+/* =========================================================
+   状態
+   ========================================================= */
+const state = {
+  loaded: false,
+  prefs: new Map(),
+  muniCache: new Map(),
+  mapBBox: null,
+
+  base: { s: 1, ox: 0, oy: 0 },
+  view: { s: 1, ox: 0, oy: 0 },
+  zoom: 1,
+  pan: { x: 0, y: 0 },
+
+  fitBBox: null,
+  tab: "pref",
+  currentPref: null,
+  currentMuni: null,
+  target: null,
+
+  mode: "draw",
+  polys: [],
+  stroke: null,
+  drawZoom: 1,
+  drawPan: { x: 0, y: 0 },
+  placed: { x: 0, y: 0 },
+  scale: 1,
+  score: 0,
+  scoreDetail: { shape: 0, pos: 0, distKm: 0, borderKm: 0 },
+
+  showHint: false
+};
+
+let gesture = null;
+const pointers = new Map();
+
+/* =========================================================
+   DOM / キャンバス
+   ========================================================= */
+const CV = document.getElementById("cv");
+const ctx = CV.getContext("2d");
+let W = 1, H = 1, DPR = 1;
+let mapCache = null;
+let viewDirty = true;
+let rafId = 0;
+let hintCache = null;
+
+function showStageLoading(msg){
+  document.getElementById("stageSpin").hidden = false;
+  document.getElementById("stageRetry").hidden = true;
+  document.getElementById("stageLoadingTxt").innerHTML = msg || "読み込み中…";
+  document.getElementById("stageLoading").hidden = false;
+}
+function showStageError(msg, retryFn){
+  document.getElementById("stageSpin").hidden = true;
+  const retry = document.getElementById("stageRetry");
+  retry.hidden = false;
+  retry.onclick = () => { hideStageLoading(); if(retryFn) retryFn(); };
+  document.getElementById("stageLoadingTxt").innerHTML =
+    '<div class="err">読み込み失敗</div>' + (msg || "");
+  document.getElementById("stageLoading").hidden = false;
+}
+function hideStageLoading(){
+  document.getElementById("stageLoading").hidden = true;
+}
+
+/* =========================================================
+   幾何
+   ========================================================= */
+function ringArea(pts){
+  let a = 0;
+  for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){
+    a += pts[j].x * pts[i].y - pts[i].x * pts[j].y;
+  }
+  return a / 2;
+}
+function ringCentroid(pts){
+  let a = 0, cx = 0, cy = 0;
+  for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){
+    const f = pts[j].x * pts[i].y - pts[i].x * pts[j].y;
+    a += f; cx += (pts[j].x + pts[i].x) * f; cy += (pts[j].y + pts[i].y) * f;
+  }
+  a *= 0.5;
+  if(Math.abs(a) < 1e-12){
+    let sx = 0, sy = 0;
+    for(const p of pts){ sx += p.x; sy += p.y; }
+    return { x: sx / pts.length, y: sy / pts.length };
+  }
+  return { x: cx / (6 * a), y: cy / (6 * a) };
+}
+function bboxOfRings(rings){
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for(const r of rings){
+    for(const p of r){
+      if(p.x < minX) minX = p.x;
+      if(p.x > maxX) maxX = p.x;
+      if(p.y < minY) minY = p.y;
+      if(p.y > maxY) maxY = p.y;
+    }
+  }
+  return { minX, minY, maxX, maxY };
+}
+function pointInPoly(x, y, poly){
+  let inside = false;
+  for(let i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if(((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+function nearStart(pts){
+  if(pts.length < 4) return false;
+  const a = pts[0], b = pts[pts.length - 1];
+  return Math.hypot(a.x - b.x, a.y - b.y) * state.drawZoom < CLOSE_DIST;
+}
+function s2b(sx, sy){
+  return {
+    x: (sx - state.drawPan.x) / state.drawZoom,
+    y: (sy - state.drawPan.y) / state.drawZoom
+  };
+}
+function zoomDrawAt(sx, sy, factor){
+  const nz = Math.min(MAX_ZOOM, Math.max(0.4, state.drawZoom * factor));
+  if(Math.abs(nz - state.drawZoom) < 1e-6) return false;
+  const bx = (sx - state.drawPan.x) / state.drawZoom;
+  const by = (sy - state.drawPan.y) / state.drawZoom;
+  state.drawZoom = nz;
+  state.drawPan.x = sx - bx * nz;
+  state.drawPan.y = sy - by * nz;
+  return true;
+}
+function combinedShape(){
+  const polys = state.polys;
+  if(!polys.length) return null;
+  let A = 0, cx = 0, cy = 0;
+  for(const p of polys){
+    A += p.area;
+    cx += p.centroid.x * p.area;
+    cy += p.centroid.y * p.area;
+  }
+  const c = A > 0 ? { x: cx / A, y: cy / A } : { x: polys[0].centroid.x, y: polys[0].centroid.y };
+  return { area: A, centroid: c };
+}
+function userWorldRings(){
+  const comb = combinedShape();
+  if(!comb) return [];
+  const s = state.scale;
+  return state.polys.map(poly => poly.pts.map(p => ({
+    x: state.placed.x + (p.x - comb.centroid.x) * s,
+    y: state.placed.y + (p.y - comb.centroid.y) * s
+  })));
+}
+function pointInUserShape(sx, sy){
+  const rings = userWorldRings();
+  const v = state.view;
+  for(const ring of rings){
+    const sp = ring.map(q => ({ x: q.x * v.s + v.ox, y: q.y * v.s + v.oy }));
+    if(pointInPoly(sx, sy, sp)) return true;
+  }
+  return false;
+}
+
+/* =========================================================
+   GeoJSON 正規化（都道府県）
+   ========================================================= */
+function normalizeName(props){
+  const strs = [];
+  for(const k in props){ if(typeof props[k] === "string") strs.push(props[k]); }
+  for(const raw of strs){
+    const t = raw.replace(/[\s\u3000]/g, "");
+    if(!t) continue;
+    let idx = PREFS.indexOf(t);
+    if(idx >= 0) return PREFS[idx];
+    idx = BASE_NAMES.indexOf(t.replace(/[都府県]$/, ""));
+    if(idx >= 0 && t.length >= 2) return PREFS[idx];
+    let key = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z]/g,"");
+    if(!key) continue;
+    if(ROMAJI[key]) return ROMAJI[key];
+    if(key.length > 4){
+      for(const suf of ["ken","fu","to"]){
+        if(key.endsWith(suf)){
+          const k2 = key.slice(0, -suf.length);
+          if(ROMAJI[k2]) return ROMAJI[k2];
+        }
+      }
+    }
+  }
+  return null;
+}
+function collectRings(geom, out){
+  if(!geom) return;
+  const t = geom.type;
+  if(t === "Polygon"){
+    for(const ring of geom.coordinates) out.push(ring);
+  } else if(t === "MultiPolygon"){
+    for(const poly of geom.coordinates) for(const ring of poly) out.push(ring);
+  } else if(t === "GeometryCollection"){
+    for(const g of geom.geometries) collectRings(g, out);
+  }
+}
+function projectRing(ring){
+  const pts = [];
+  for(const c of ring){
+    if(!c || c.length < 2) continue;
+    const lon = +c[0], lat = +c[1];
+    if(!isFinite(lon) || !isFinite(lat)) continue;
+    pts.push({ x: projLon(lon), y: projLat(lat) });
+  }
+  return pts;
+}
+function decimate(pts, tol){
+  tol = tol || 0.0001;
+  if(pts.length < 4) return pts;
+  const out = [pts[0]];
+  const t2 = tol * tol;
+  for(let i = 1; i < pts.length; i++){
+    const p = pts[i], q = out[out.length - 1];
+    const dx = p.x - q.x, dy = p.y - q.y;
+    if(dx * dx + dy * dy >= t2) out.push(p);
+  }
+  if(out.length >= 3){
+    const f = out[0], l = out[out.length - 1];
+    if((f.x - l.x) ** 2 + (f.y - l.y) ** 2 < t2) out.pop();
+  }
+  return out;
+}
+function buildPrefs(gj){
+  const feats = gj && gj.type === "FeatureCollection" ? (gj.features || [])
+              : gj && gj.type === "Feature" ? [gj] : [];
+  const raw = new Map();
+  for(const f of feats){
+    const name = normalizeName(f.properties || {});
+    if(!name) continue;
+    const rings = [];
+    collectRings(f.geometry, rings);
+    if(!rings.length) continue;
+    let arr = raw.get(name);
+    if(!arr){ arr = []; raw.set(name, arr); }
+    for(const r of rings){
+      const pr = decimate(projectRing(r), 0.00005);
+      if(pr.length >= 3) arr.push(pr);
+    }
+  }
+  const out = new Map();
+  for(const [name, rings] of raw){
+    const infos = rings.map(r => ({ r, a: Math.abs(ringArea(r)), c: ringCentroid(r) }));
+    const kept = [];
+    for(const it of infos){
+      if(it.a <= 0) continue;
+      if(it.c.x < BX0 || it.c.x > BX1) continue;
+      if(it.c.y < BY0 || it.c.y > BY1) continue;
+      kept.push(it.r);
+    }
+    if(!kept.length) continue;
+    let area = 0;
+    for(const r of kept) area += Math.abs(ringArea(r));
+    const bbox = bboxOfRings(kept);
+    out.set(name, { name, rings: kept, bbox, area });
+  }
+  return out;
+}
+
+/* =========================================================
+   GeoJSON 正規化（市区町村）
+   ========================================================= */
+function pickProp(props, keys){
+  for(const k of keys){
+    if(props[k] != null){
+      const v = String(props[k]).trim();
+      if(v !== "") return v;
+    }
+  }
+  return "";
+}
+
+function buildMunis(gj, prefName){
+  const feats = (gj && gj.features) || [];
+  const raw = new Map();
+
+  for(const f of feats){
+    const p = f.properties || {};
+
+    const muniName = pickProp(p, ["N03_004", "市区町村名", "市町村名", "name", "NAME", "muni"]);
+    const county   = pickProp(p, ["N03_003", "郡名", "郡・政令都市名"]);
+    const wardName = pickProp(p, ["N03_005", "区名", "政令指定都市の区名"]);
+    const code     = pickProp(p, ["N03_007", "行政区域コード", "id", "ID", "code"]);
+
+    let display;
+    if(wardName){
+      display = (county || muniName) + wardName;
+    } else if(muniName){
+      display = muniName;
+    } else {
+      continue;
+    }
+    if(display === "所属未定地") continue;
+
+    const key = code || display;
+
+    const rings = [];
+    collectRings(f.geometry, rings);
+    if(!rings.length) continue;
+
+    let entry = raw.get(key);
+    if(!entry){ entry = { display, rings: [] }; raw.set(key, entry); }
+    for(const r of rings){
+      const pr = decimate(projectRing(r), 0.00005);
+      if(pr.length >= 3) entry.rings.push(pr);
+    }
+  }
+
+  const out = new Map();
+  for(const [code, entry] of raw){
+    if(!entry.rings.length) continue;
+    let area = 0;
+    for(const r of entry.rings) area += Math.abs(ringArea(r));
+    const bbox = bboxOfRings(entry.rings);
+    out.set(code, { display: entry.display, code, pref: prefName, rings: entry.rings, bbox, area });
+  }
+  return out;
+}
+
+async function fetchJSON(url, ms){
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms || 20000);
+  try{
+    const res = await fetch(url, { signal: ctrl.signal });
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadMunicipalityData(prefName){
+  if(state.muniCache.has(prefName)) return state.muniCache.get(prefName);
+  const code = PREF_CODE[prefName];
+  if(!code) throw new Error("都道府県コードが見つかりません: " + prefName);
+
+  let gj = null, lastErr = null;
+  for(const url of MUNI_URLS(code)){
+    try{
+      gj = await fetchJSON(url);
+      if(gj && (gj.type === "FeatureCollection" || gj.features)) break;
+      gj = null;
+    }catch(e){
+      lastErr = e;
+    }
+  }
+  if(!gj){
+    throw lastErr || new Error("全URLで取得失敗（ファイルが見つかりません）");
+  }
+
+  const munis = buildMunis(gj, prefName);
+  if(!munis.size){
+    throw new Error("GeoJSONは取得できましたが、市区町村を抽出できませんでした");
+  }
+  state.muniCache.set(prefName, munis);
+  return munis;
+}
+
+/* =========================================================
+   見本パス
+   ========================================================= */
+function buildHintPath(){
+  const target = state.target;
+  if(!target) return null;
+  const key = target.display + "|" + W + "x" + H;
+  if(hintCache && hintCache.key === key) return hintCache.path;
+
+  const bb = target.bbox;
+  const w = Math.max(1e-9, bb.maxX - bb.minX);
+  const h = Math.max(1e-9, bb.maxY - bb.minY);
+  const pad = 46;
+  const s = Math.min((W - pad * 2) / w, (H - pad * 2) / h) * 0.82;
+  if(!isFinite(s) || s <= 0) return null;
+  const ox = W / 2 - (bb.minX + w / 2) * s;
+  const oy = H / 2 - (bb.minY + h / 2) * s;
+
+  const path = new Path2D();
+  for(const ring of target.rings){
+    if(ring.length < 3) continue;
+    path.moveTo(ring[0].x * s + ox, ring[0].y * s + oy);
+    for(let i = 1; i < ring.length; i++){
+      path.lineTo(ring[i].x * s + ox, ring[i].y * s + oy);
+    }
+    path.closePath();
+  }
+  hintCache = { key, path };
+  return path;
+}
+
+/* =========================================================
+   ビュー
+   ========================================================= */
+function getFitBBox(){
+  if(state.fitBBox) return state.fitBBox;
+  if(state.tab === "muni" && state.currentPref && state.prefs.has(state.currentPref)){
+    const bb = state.prefs.get(state.currentPref).bbox;
+    const pw = (bb.maxX - bb.minX) * 0.18 + 1e-6;
+    const ph = (bb.maxY - bb.minY) * 0.18 + 1e-6;
+    return {
+      minX: bb.minX - pw, maxX: bb.maxX + pw,
+      minY: bb.minY - ph, maxY: bb.maxY + ph
+    };
+  }
+  return state.mapBBox;
+}
+
+function computeBase(){
+  const bb = getFitBBox();
+  if(!bb) return;
+  const pad = 26;
+  const w = Math.max(1e-9, bb.maxX - bb.minX);
+  const h = Math.max(1e-9, bb.maxY - bb.minY);
+  let s = Math.min((W - pad * 2) / w, (H - pad * 2) / h);
+  if(!isFinite(s) || s <= 0) s = 1;
+  state.base = {
+    s,
+    ox: (W - w * s) / 2 - bb.minX * s,
+    oy: (H - h * s) / 2 - bb.minY * s
+  };
+}
+function recomputeView(){
+  const b = state.base, z = state.zoom;
+  state.view = {
+    s: b.s * z,
+    ox: (b.ox - W / 2) * z + W / 2 + state.pan.x,
+    oy: (b.oy - H / 2) * z + H / 2 + state.pan.y
+  };
+}
+function clampView(){
+  const bb = state.mapBBox;
+  if(!bb) return;
+  const m = 70;
+  const v = state.view;
+  const x0 = bb.minX * v.s + v.ox, x1 = bb.maxX * v.s + v.ox;
+  const y0 = bb.minY * v.s + v.oy, y1 = bb.maxY * v.s + v.oy;
+  let dx = 0, dy = 0;
+  if(x1 < m) dx = m - x1;
+  else if(x0 > W - m) dx = (W - m) - x0;
+  if(y1 < m) dy = m - y1;
+  else if(y0 > H - m) dy = (H - m) - y0;
+  if(dx || dy){ state.pan.x += dx; state.pan.y += dy; recomputeView(); }
+}
+function updateView(){
+  recomputeView();
+  clampView();
+  viewDirty = true;
+}
+function applyView(){
+  computeBase();
+  state.zoom = 1;
+  state.pan.x = 0;
+  state.pan.y = 0;
+  updateView();
+}
+function zoomAt(sx, sy, factor){
+  const nz = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, state.zoom * factor));
+  if(Math.abs(nz - state.zoom) < 1e-6) return false;
+  const v = state.view;
+  const wx = (sx - v.ox) / v.s;
+  const wy = (sy - v.oy) / v.s;
+  state.zoom = nz;
+  updateView();
+  const v2 = state.view;
+  state.pan.x += sx - (wx * v2.s + v2.ox);
+  state.pan.y += sy - (wy * v2.s + v2.oy);
+  updateView();
+  return true;
+}
+
+/* =========================================================
+   マップキャッシュ
+   ========================================================= */
+function buildMapCache(){
+  mapCache = document.createElement("canvas");
+  mapCache.width = Math.max(1, Math.round(W * DPR));
+  mapCache.height = Math.max(1, Math.round(H * DPR));
+  const g = mapCache.getContext("2d");
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  g.clearRect(0, 0, W, H);
+
+  const v = state.view;
+  const path = new Path2D();
+  for(const pref of state.prefs.values()){
+    for(const ring of pref.rings){
+      if(ring.length < 3) continue;
+      path.moveTo(ring[0].x * v.s + v.ox, ring[0].y * v.s + v.oy);
+      for(let i = 1; i < ring.length; i++){
+        path.lineTo(ring[i].x * v.s + v.ox, ring[i].y * v.s + v.oy);
+      }
+      path.closePath();
+    }
+  }
+  g.lineJoin = "round";
+  g.lineWidth = 2.6;
+  g.strokeStyle = "#a9bed6";
+  g.stroke(path);
+  g.fillStyle = "#dde9f6";
+  g.fill(path);
+
+  if(state.tab === "muni"){
+    g.lineWidth = 1.25;
+    g.strokeStyle = "#94b0cf";
+    g.stroke(path);
+  }
+}
+
+/* =========================================================
+   描画
+   ========================================================= */
+function s2w(sx, sy){
+  return { x: (sx - state.view.ox) / state.view.s, y: (sy - state.view.oy) / state.view.s };
+}
+function scheduleRender(){
+  if(rafId) return;
+  rafId = requestAnimationFrame(() => { rafId = 0; render(); });
+}
+function render(){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  if(!state.loaded) return;
+  if(state.mode === "draw"){ renderBoard(); return; }
+  if(viewDirty){ buildMapCache(); viewDirty = false; }
+  if(mapCache) ctx.drawImage(mapCache, 0, 0, W, H);
+  if(state.mode === "result") renderTruth();
+  renderUserShape();
+}
+function drawBoardPoly(pts, alpha){
+  if(pts.length < 3) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for(let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(37,99,235," + alpha + ")";
+  ctx.fill();
+  ctx.strokeStyle = "#2563eb";
+  ctx.lineWidth = 2.4 / state.drawZoom;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+}
+function renderBoard(){
+  ctx.fillStyle = "#fbfdff";
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.translate(state.drawPan.x, state.drawPan.y);
+  ctx.scale(state.drawZoom, state.drawZoom);
+
+  const g = 44;
+  const x0 = Math.floor((-state.drawPan.x / state.drawZoom) / g) * g;
+  const y0 = Math.floor((-state.drawPan.y / state.drawZoom) / g) * g;
+  const x1 = x0 + W / state.drawZoom + g * 2;
+  const y1 = y0 + H / state.drawZoom + g * 2;
+
+  ctx.strokeStyle = "#eef3f9";
+  ctx.lineWidth = 1 / state.drawZoom;
+  ctx.beginPath();
+  for(let x = x0; x < x1; x += g){ ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
+  for(let y = y0; y < y1; y += g){ ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
+  ctx.stroke();
+
+  if(state.showHint){
+    const hp = buildHintPath();
+    if(hp){
+      ctx.save();
+      ctx.fillStyle = "rgba(16,185,129,.10)";
+      ctx.fill(hp);
+      ctx.strokeStyle = "rgba(5,150,105,.60)";
+      ctx.lineWidth = 1.8 / state.drawZoom;
+      ctx.lineJoin = "round";
+      ctx.setLineDash([7 / state.drawZoom, 5 / state.drawZoom]);
+      ctx.stroke(hp);
+      ctx.restore();
+    }
+  }
+
+  for(const poly of state.polys) drawBoardPoly(poly.pts, 0.14);
+
+  if(state.stroke && state.stroke.length > 1){
+    const pts = state.stroke;
+    if(nearStart(pts)){
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for(let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(37,99,235,.10)";
+      ctx.fill();
+    } else if(pts.length >= 4){
+      const f = pts[0], l = pts[pts.length - 1];
+      ctx.beginPath();
+      ctx.moveTo(l.x, l.y);
+      ctx.lineTo(f.x, f.y);
+      ctx.setLineDash([5 / state.drawZoom, 5 / state.drawZoom]);
+      ctx.strokeStyle = "rgba(37,99,235,.35)";
+      ctx.lineWidth = 1.4 / state.drawZoom;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2.6 / state.drawZoom;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function renderTruth(){
+  const target = state.target;
+  if(!target) return;
+  const v = state.view;
+  ctx.beginPath();
+  for(const ring of target.rings){
+    if(ring.length < 3) continue;
+    ctx.moveTo(ring[0].x * v.s + v.ox, ring[0].y * v.s + v.oy);
+    for(let i = 1; i < ring.length; i++){
+      ctx.lineTo(ring[i].x * v.s + v.ox, ring[i].y * v.s + v.oy);
+    }
+    ctx.closePath();
+  }
+  ctx.fillStyle = "rgba(16,185,129,.34)";
+  ctx.fill();
+  ctx.strokeStyle = "#059669";
+  ctx.lineWidth = 2;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+}
+function renderUserShape(){
+  const rings = userWorldRings();
+  if(!rings.length) return;
+  const v = state.view;
+  ctx.beginPath();
+  for(const ring of rings){
+    if(ring.length < 3) continue;
+    ctx.moveTo(ring[0].x * v.s + v.ox, ring[0].y * v.s + v.oy);
+    for(let i = 1; i < ring.length; i++){
+      ctx.lineTo(ring[i].x * v.s + v.ox, ring[i].y * v.s + v.oy);
+    }
+    ctx.closePath();
+  }
+  ctx.fillStyle = "rgba(239,68,68,.26)";
+  ctx.fill();
+  ctx.strokeStyle = "#ef4444";
+  ctx.lineWidth = 2.4;
+  ctx.lineJoin = "round";
+  ctx.stroke();
+}
+
+/* =========================================================
+   採点
+   ========================================================= */
+function unprojLon(x){
+  return x / DEG;
+}
+function unprojLat(y){
+  return (2 * Math.atan(Math.exp(-y)) - Math.PI / 2) / DEG;
+}
+function haversineKm(lat1, lon1, lat2, lon2){
+  const R = 6371;
+  const dLat = (lat2 - lat1) * DEG;
+  const dLon = (lon2 - lon1) * DEG;
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * DEG) * Math.cos(lat2 * DEG) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function ringsCentroid(rings){
+  let totalA = 0, sx = 0, sy = 0;
+  for(const r of rings){
+    if(r.length < 3) continue;
+    const a = Math.abs(ringArea(r));
+    const c = ringCentroid(r);
+    totalA += a;
+    sx += c.x * a;
+    sy += c.y * a;
+  }
+  if(totalA > 0) return { x: sx / totalA, y: sy / totalA };
+  for(const r of rings){
+    if(r.length) return r[0];
+  }
+  return { x: 0, y: 0 };
+}
+function sampleBoundaryPoints(rings, maxPtsPerRing){
+  const pts = [];
+  for(const r of rings){
+    if(!r || r.length < 2) continue;
+    const step = Math.max(1, Math.floor(r.length / (maxPtsPerRing || 120)));
+    for(let i = 0; i < r.length; i += step){
+      pts.push({ lat: unprojLat(r[i].y), lon: unprojLon(r[i].x) });
+    }
+  }
+  return pts;
+}
+function pointToSegmentDistKm(p, a, b){
+  const cosLat = Math.cos(((a.lat + b.lat) * 0.5) * DEG);
+  const px = p.lon * cosLat, py = p.lat;
+  const ax = a.lon * cosLat, ay = a.lat;
+  const bx = b.lon * cosLat, by = b.lat;
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const projLonDeg = (ax + t * dx) / (cosLat || 1e-9);
+  const projLatDeg = ay + t * dy;
+  return haversineKm(p.lat, p.lon, projLatDeg, projLonDeg);
+}
+function ringsToLatLonSegments(rings){
+  const segs = [];
+  for(const r of rings){
+    if(!r || r.length < 2) continue;
+    for(let i = 0; i < r.length; i++){
+      const p1 = r[i];
+      const p2 = r[(i + 1) % r.length];
+      segs.push({
+        a: { lat: unprojLat(p1.y), lon: unprojLon(p1.x) },
+        b: { lat: unprojLat(p2.y), lon: unprojLon(p2.x) }
+      });
+    }
+  }
+  return segs;
+}
+function minDistToSegmentsKm(pt, segs){
+  let minD = Infinity;
+  for(const s of segs){
+    const d = pointToSegmentDistKm(pt, s.a, s.b);
+    if(d < minD) minD = d;
+  }
+  return minD;
+}
+function resampleSegmentsWithLength(rings, targetStepKm){
+  const samples = [];
+  for(const r of rings){
+    if(!r || r.length < 2) continue;
+    for(let i = 0; i < r.length; i++){
+      const p1 = r[i];
+      const p2 = r[(i + 1) % r.length];
+      const lat1 = unprojLat(p1.y), lon1 = unprojLon(p1.x);
+      const lat2 = unprojLat(p2.y), lon2 = unprojLon(p2.x);
+      const segLen = haversineKm(lat1, lon1, lat2, lon2);
+      if(segLen <= 1e-6) continue;
+      const steps = Math.max(1, Math.ceil(segLen / targetStepKm));
+      const ds = segLen / steps;
+      for(let s = 0; s < steps; s++){
+        const t = (s + 0.5) / steps;
+        samples.push({
+          lat: lat1 + (lat2 - lat1) * t,
+          lon: lon1 + (lon2 - lon1) * t,
+          len: ds
+        });
+      }
+    }
+  }
+  return samples;
+}
+function totalUnmatchedBoundaryKm(refRings, alignedUserRings, stepKm){
+  const sampleIntervalKm = Math.max(0.15, stepKm * 0.25);
+  const tolKm = stepKm * 0.35;
+
+  const refSamples = resampleSegmentsWithLength(refRings, sampleIntervalKm);
+  const userSamples = resampleSegmentsWithLength(alignedUserRings, sampleIntervalKm);
+  const refSegs = ringsToLatLonSegments(refRings);
+  const userSegs = ringsToLatLonSegments(alignedUserRings);
+  if(!refSamples.length || !userSamples.length || !refSegs.length || !userSegs.length) return 9999;
+
+  // 正解の境界線のうち、描いた線と重なっていない区間の総距離（km）
+  let unmatchedRefKm = 0;
+  for(const sp of refSamples){
+    const d = minDistToSegmentsKm(sp, userSegs);
+    if(d > tolKm){
+      unmatchedRefKm += sp.len;
+    }
+  }
+
+  // 描いた境界線のうち、正解の線と重なっていない（余分な）区間の総距離（km）
+  let unmatchedUserKm = 0;
+  for(const sp of userSamples){
+    const d = minDistToSegmentsKm(sp, refSegs);
+    if(d > tolKm){
+      unmatchedUserKm += sp.len;
+    }
+  }
+
+  return (unmatchedRefKm + unmatchedUserKm) / 2;
+}
+function computeScore100(refRings, userRings, shapeUnitKm, posUnitKm){
+  const shapeStepKm = (shapeUnitKm && shapeUnitKm > 0) ? shapeUnitKm : 5;
+  const posStepKm = (posUnitKm && posUnitKm > 0) ? posUnitKm : 5;
+  const rc = ringsCentroid(refRings);
+  const uc = ringsCentroid(userRings);
+
+  // 位置の正確さ：中心（重心）間の距離（km）
+  const distKm = haversineKm(unprojLat(rc.y), unprojLon(rc.x), unprojLat(uc.y), unprojLon(uc.x));
+  const pos = Math.max(0, 50 - Math.floor(distKm / posStepKm));
+
+  // 地形（境）の正確さ：重心を合わせた上で、境界線が重なっていない総距離（km）を計測
+  const dx = rc.x - uc.x;
+  const dy = rc.y - uc.y;
+  const alignedUserRings = userRings.map(r => r.map(p => ({ x: p.x + dx, y: p.y + dy })));
+  const borderKm = totalUnmatchedBoundaryKm(refRings, alignedUserRings, shapeStepKm);
+  const shape = Math.max(0, 50 - Math.floor(borderKm / shapeStepKm));
+
+  const total = Math.min(100, Math.max(0, shape + pos));
+  return {
+    total,
+    shape,
+    pos,
+    stepKm: posStepKm,
+    distKm: Number(distKm.toFixed(2)),
+    borderKm: Number(borderKm.toFixed(2))
+  };
+}
+
+/* =========================================================
+   フロー
+   ========================================================= */
+function setTarget(entity){
+  state.target = entity;
+  state.mode = "draw";
+  state.polys = [];
+  state.stroke = null;
+  state.drawZoom = 1;
+  state.drawPan = { x: 0, y: 0 };
+  state.scale = 1;
+  state.placed = { x: 0, y: 0 };
+  state.score = 0;
+  state.scoreDetail = { shape: 0, pos: 0, distKm: 0, borderKm: 0 };
+  state.fitBBox = null;
+  gesture = null;
+  pointers.clear();
+  applyView();
+  updateUI();
+  scheduleRender();
+}
+
+function randomPrefName(){
+  const names = Array.from(state.prefs.keys());
+  if(!names.length) return null;
+  if(names.length <= 1) return names[0];
+  let n;
+  do { n = names[Math.floor(Math.random() * names.length)]; } while(n === state.currentPref);
+  return n;
+}
+
+function selectPref(prefName){
+  state.tab = "pref";
+  state.currentPref = prefName;
+  state.currentMuni = null;
+  const sel = document.getElementById("prefSel");
+  if(sel) sel.value = prefName;
+  const p = state.prefs.get(prefName);
+  if(!p) return;
+  setTarget({ name: p.name, display: p.name, rings: p.rings, bbox: p.bbox, area: p.area });
+}
+
+function selectMuniTarget(prefName, muniKey){
+  const munis = state.muniCache.get(prefName);
+  if(!munis) return;
+  const m = munis.get(muniKey);
+  if(!m) return;
+  state.currentPref = prefName;
+  state.currentMuni = muniKey;
+  const sel = document.getElementById("prefSel");
+  if(sel) sel.value = prefName;
+  const msel = document.getElementById("muniSel");
+  if(msel) msel.value = muniKey;
+  setTarget({ name: m.display, display: prefName + " " + m.display, rings: m.rings, bbox: m.bbox, area: m.area });
+}
+
+function populateMuniSelect(munis){
+  const sel = document.getElementById("muniSel");
+  sel.innerHTML = "";
+  const arr = Array.from(munis.entries())
+    .sort((a, b) => String(a[1].code).localeCompare(String(b[1].code)));
+  for(const [key, m] of arr){
+    const o = document.createElement("option");
+    o.value = key;
+    o.textContent = m.display;
+    sel.appendChild(o);
+  }
+}
+
+async function enterMuniMode(prefName, forceRandomMuni){
+  state.tab = "muni";
+  const targetPref = prefName || state.currentPref || randomPrefName();
+  if(!targetPref) return;
+
+  state.currentPref = targetPref;
+  const sel = document.getElementById("prefSel");
+  if(sel) sel.value = targetPref;
+  document.getElementById("muniSel").hidden = false;
+
+  if(state.muniCache.has(targetPref)){
+    const munis = state.muniCache.get(targetPref);
+    if(munis && munis.size){
+      populateMuniSelect(munis);
+      const keys = Array.from(munis.keys());
+      let key;
+      if(!forceRandomMuni && state.currentMuni && munis.has(state.currentMuni)){
+        key = state.currentMuni;
+      } else {
+        key = keys[Math.floor(Math.random() * keys.length)];
+      }
+      selectMuniTarget(targetPref, key);
+      return;
+    }
+  }
+
+  showStageLoading(targetPref + " の市区町村データを読み込み中…");
+  try{
+    const munis = await loadMunicipalityData(targetPref);
+    hideStageLoading();
+    populateMuniSelect(munis);
+    const keys = Array.from(munis.keys());
+    const key = keys[Math.floor(Math.random() * keys.length)];
+    selectMuniTarget(targetPref, key);
+  }catch(e){
+    console.warn("[muni] load failed:", e);
+    showStageError(
+      targetPref + " の市区町村データを取得できませんでした。<br>" +
+      '<span style="font-size:11px;color:#94a3b8">' +
+      (e && e.message ? String(e.message).replace(/</g, "&lt;") : "原因不明") +
+      '</span>',
+      () => { enterMuniMode(targetPref, true); }
+    );
+  }
+}
+
+async function randomMuniAcrossAllPrefs(){
+  const nextPref = randomPrefName() || state.currentPref;
+  if(!nextPref) return;
+  state.currentMuni = null;
+  await enterMuniMode(nextPref, true);
+}
+
+async function switchTab(tab){
+  if(tab === state.tab){
+    if(tab === "pref") selectPref(randomPrefName() || state.currentPref);
+    else await randomMuniAcrossAllPrefs();
+    return;
+  }
+  state.fitBBox = null;
+  gesture = null;
+  pointers.clear();
+
+  if(tab === "pref"){
+    document.getElementById("muniSel").hidden = true;
+    const pref = state.currentPref && state.prefs.has(state.currentPref)
+      ? state.currentPref : randomPrefName();
+    if(pref) selectPref(pref);
+  } else {
+    await enterMuniMode(state.currentPref, false);
+  }
+  updateUI();
+}
+
+function getInitialPlacementCenter(){
+  if(state.tab === "muni" && state.currentPref && state.prefs.has(state.currentPref)){
+    const pb = state.prefs.get(state.currentPref).bbox;
+    return { x: (pb.minX + pb.maxX) / 2, y: (pb.minY + pb.maxY) / 2 };
+  }
+  if(state.mapBBox){
+    const b = state.mapBBox;
+    return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+  }
+  return null;
+}
+
+function goPlace(){
+  const comb = combinedShape();
+  if(!comb) return;
+  const target = state.target;
+  if(!target) return;
+  const s = Math.sqrt(target.area / comb.area);
+  state.scale = (isFinite(s) && s > 0) ? s : 1;
+
+  const center = getInitialPlacementCenter();
+  if(!center) return;
+  state.placed = center;
+
+  state.mode = "place";
+  state.zoom = 1;
+  state.pan.x = 0;
+  state.pan.y = 0;
+  updateView();
+  updateUI();
+  scheduleRender();
+}
+
+function grade(){
+  const target = state.target;
+  const rings = userWorldRings();
+  if(!target || !rings.length) return;
+  const shapeStepKm = state.tab === "muni" ? 1 : 5;
+  const posStepKm = state.tab === "muni" ? 1 : 5;
+  const res = computeScore100(target.rings, rings, shapeStepKm, posStepKm);
+  state.score = res.total;
+  state.scoreDetail = {
+    shape: res.shape,
+    pos: res.pos,
+    stepKm: res.stepKm,
+    distKm: res.distKm,
+    borderKm: res.borderKm
+  };
+  state.mode = "result";
+
+  const pb = target.bbox;
+  const ub = bboxOfRings(rings);
+  const bb = {
+    minX: Math.min(pb.minX, ub.minX),
+    minY: Math.min(pb.minY, ub.minY),
+    maxX: Math.max(pb.maxX, ub.maxX),
+    maxY: Math.max(pb.maxY, ub.maxY)
+  };
+  const pw = (bb.maxX - bb.minX) * 0.14 + 1e-6;
+  const ph = (bb.maxY - bb.minY) * 0.14 + 1e-6;
+  bb.minX -= pw; bb.maxX += pw; bb.minY -= ph; bb.maxY += ph;
+  state.fitBBox = bb;
+
+  applyView();
+  updateUI();
+  scheduleRender();
+}
+
+function scoreMessage(p){
+  if(p >= 85) return "🏆 神業レベル！";
+  if(p >= 70) return "🎉 すばらしい！";
+  if(p >= 55) return "👍 かなり正確！";
+  if(p >= 40) return "🙂 いい線いってる";
+  if(p >= 25) return "😅 もう少し！";
+  return "😵 ざんねん…";
+}
+
+function updateUI(){
+  const m = state.mode;
+  const el = id => document.getElementById(id);
+  const hasPoly = state.polys.length > 0;
+
+  el("btnUndo").hidden = m !== "draw";
+  el("btnUndo").disabled = !hasPoly;
+  el("btnClear").hidden = m !== "draw";
+  el("btnClear").disabled = !hasPoly;
+  el("btnPlace").hidden = m !== "draw";
+  el("btnPlace").disabled = !hasPoly;
+  el("btnBack").hidden = m !== "place";
+  el("btnGrade").hidden = m !== "place";
+  el("btnNext").hidden = m !== "result";
+
+  el("shapeCtl").hidden = m !== "place";
+  el("legend").hidden = m !== "result";
+
+  for(const b of document.querySelectorAll(".tab")){
+    b.classList.toggle("active", b.dataset.tab === state.tab);
+  }
+
+  const targetLabel = state.tab === "muni" ? "市区町村" : "都道府県";
+  el("target").innerHTML = state.target
+    ? "<small>" + targetLabel + "</small>" + state.target.display
+    : "";
+
+  el("btnNext").textContent = state.tab === "muni" ? "次の市区町村 →" : "次の都道府県 →";
+
+  el("zoomCtl").hidden = false;
+  CV.style.cursor = (m === "draw") ? "crosshair" : "grab";
+
+  const hintBtn = el("btnHint");
+  hintBtn.setAttribute("aria-pressed", state.showHint ? "true" : "false");
+  hintBtn.textContent = state.showHint ? "見本 ON" : "見本 OFF";
+
+  const hint = el("hint");
+  hint.classList.toggle("result-badge", m === "result");
+  if(m === "draw"){
+    if(state.polys.length){
+      hint.textContent = "離島などを描き足せます（ホイール・2本指で拡大移動）";
+    } else if(state.showHint){
+      hint.textContent = "見本を見ながら線を引いて、始点に戻ると閉じます";
+    } else {
+      hint.textContent = (state.target ? state.target.display : "") + " の形を描画（ホイール・2本指で拡大移動）";
+    }
+  } else if(m === "place"){
+    hint.textContent = "赤い形をドラッグして正しい位置に配置しよう";
+  } else {
+    const pct = Math.round(state.score);
+    const d = state.scoreDetail || { shape: 0, pos: 0, stepKm: 5, distKm: 0, borderKm: 0 };
+    hint.innerHTML =
+      "総合点数: " + pct + "点/100点<br>" +
+      "境&nbsp;&nbsp;界&nbsp;&nbsp;線: " + d.shape + "点/50点（総距離" + d.borderKm.toFixed(2) + "km不一致）<br>" +
+      "位　　置: " + d.pos + "点/50点（" + d.distKm.toFixed(2) + "km差）";
+  }
+}
+
+/* =========================================================
+   入力
+   ========================================================= */
+function canvasPos(e){
+  const r = CV.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+function startPinch(){
+  const pts = Array.from(pointers.values());
+  if(pts.length < 2) return;
+  const a = pts[0], b = pts[1];
+  gesture = {
+    type: "pinch",
+    dist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+    mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+  };
+  CV.style.cursor = "grabbing";
+}
+function onDown(e){
+  if(!state.loaded) return;
+  if(e.pointerType === "mouse" && e.button !== 0 && e.button !== 1 && e.button !== 2) return;
+  if(!document.getElementById("stageLoading").hidden) return;
+  const p = canvasPos(e);
+  pointers.set(e.pointerId, p);
+
+  if(state.mode === "draw"){
+    e.preventDefault();
+    try{ CV.setPointerCapture(e.pointerId); }catch(_){}
+    if(e.pointerType === "mouse" && (e.button === 1 || e.button === 2)){
+      state.stroke = null;
+      gesture = { type: "drawPan", sx: p.x, sy: p.y, panX: state.drawPan.x, panY: state.drawPan.y };
+      CV.style.cursor = "grabbing";
+      scheduleRender();
+      return;
+    }
+    if(pointers.size === 2){
+      state.stroke = null;
+      startPinch();
+      scheduleRender();
+      return;
+    }
+    if(pointers.size > 2) return;
+    state.stroke = [s2b(p.x, p.y)];
+    updateUI();
+    scheduleRender();
+    return;
+  }
+
+  if(e.pointerType === "mouse" && e.button !== 0) return;
+  e.preventDefault();
+  try{ CV.setPointerCapture(e.pointerId); }catch(_){}
+  if(pointers.size === 2){ startPinch(); return; }
+  if(pointers.size > 2) return;
+
+  if(state.mode === "place"){
+    if(pointInUserShape(p.x, p.y)){
+      const w = s2w(p.x, p.y);
+      gesture = { type: "shape", dx: state.placed.x - w.x, dy: state.placed.y - w.y };
+      CV.style.cursor = "grabbing";
+      return;
+    }
+  }
+  gesture = { type: "pan", sx: p.x, sy: p.y, panX: state.pan.x, panY: state.pan.y };
+  CV.style.cursor = "grabbing";
+}
+function onMove(e){
+  if(!state.loaded) return;
+  if(pointers.has(e.pointerId)) pointers.set(e.pointerId, canvasPos(e));
+  const p = canvasPos(e);
+
+  if(state.mode === "draw"){
+    if(gesture && gesture.type === "pinch"){
+      e.preventDefault();
+      const pts = Array.from(pointers.values());
+      if(pts.length < 2) return;
+      const a = pts[0], b = pts[1];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      state.drawPan.x += mid.x - gesture.mid.x;
+      state.drawPan.y += mid.y - gesture.mid.y;
+      const factor = dist / (gesture.dist || 1);
+      if(Math.abs(factor - 1) > 1e-4) zoomDrawAt(mid.x, mid.y, factor);
+      gesture.dist = dist;
+      gesture.mid = mid;
+      scheduleRender();
+      return;
+    }
+    if(gesture && gesture.type === "drawPan"){
+      e.preventDefault();
+      state.drawPan.x = gesture.panX + (p.x - gesture.sx);
+      state.drawPan.y = gesture.panY + (p.y - gesture.sy);
+      scheduleRender();
+      return;
+    }
+    if(state.stroke && pointers.size === 1){
+      e.preventDefault();
+      const bp = s2b(p.x, p.y);
+      const last = state.stroke[state.stroke.length - 1];
+      const dx = bp.x - last.x, dy = bp.y - last.y;
+      if((dx * dx + dy * dy) * state.drawZoom * state.drawZoom >= 4){
+        state.stroke.push(bp);
+        scheduleRender();
+      }
+    }
+    return;
+  }
+
+  if(!gesture) return;
+  e.preventDefault();
+
+  if(gesture.type === "pinch"){
+    const pts = Array.from(pointers.values());
+    if(pts.length < 2) return;
+    const a = pts[0], b = pts[1];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    state.pan.x += mid.x - gesture.mid.x;
+    state.pan.y += mid.y - gesture.mid.y;
+    updateView();
+    const factor = dist / (gesture.dist || 1);
+    if(Math.abs(factor - 1) > 1e-4) zoomAt(mid.x, mid.y, factor);
+    gesture.dist = dist;
+    gesture.mid = mid;
+    scheduleRender();
+    return;
+  }
+
+  if(gesture.type === "pan"){
+    state.pan.x = gesture.panX + (p.x - gesture.sx);
+    state.pan.y = gesture.panY + (p.y - gesture.sy);
+    updateView();
+    scheduleRender();
+    return;
+  }
+
+  if(gesture.type === "shape"){
+    const w = s2w(p.x, p.y);
+    state.placed.x = w.x + gesture.dx;
+    state.placed.y = w.y + gesture.dy;
+    scheduleRender();
+  }
+}
+function onUp(e){
+  if(!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+
+  if(state.mode === "draw"){
+    if(state.stroke) finishStroke();
+    if(pointers.size === 0){
+      gesture = null;
+      CV.style.cursor = "crosshair";
+    }
+    return;
+  }
+
+  if(pointers.size === 0){
+    gesture = null;
+    CV.style.cursor = "grab";
+  } else if(pointers.size === 1){
+    const p = Array.from(pointers.values())[0];
+    gesture = { type: "pan", sx: p.x, sy: p.y, panX: state.pan.x, panY: state.pan.y };
+    CV.style.cursor = "grabbing";
+  } else {
+    startPinch();
+  }
+}
+function finishStroke(){
+  const pts = state.stroke;
+  state.stroke = null;
+  if(!pts || pts.length < MIN_POLY_PTS){ scheduleRender(); updateUI(); return; }
+  const area = Math.abs(ringArea(pts));
+  if(area < MIN_POLY_AREA){ scheduleRender(); updateUI(); return; }
+  state.polys.push({ pts, area, centroid: ringCentroid(pts) });
+  updateUI();
+  scheduleRender();
+}
+
+/* =========================================================
+   イベント登録
+   ========================================================= */
+CV.addEventListener("pointerdown", onDown);
+CV.addEventListener("pointermove", onMove);
+CV.addEventListener("pointerup", onUp);
+CV.addEventListener("pointercancel", onUp);
+window.addEventListener("pointerup", onUp);
+window.addEventListener("pointercancel", onUp);
+
+CV.addEventListener("wheel", e => {
+  if(!state.loaded) return;
+  e.preventDefault();
+  const p = canvasPos(e);
+  const dy = (e.deltaMode === 1) ? e.deltaY * 16 : e.deltaY;
+  const factor = Math.exp(-dy * 0.0018);
+  if(state.mode === "draw"){
+    if(zoomDrawAt(p.x, p.y, factor)) scheduleRender();
+  } else {
+    if(zoomAt(p.x, p.y, factor)) scheduleRender();
+  }
+}, { passive: false });
+
+CV.addEventListener("contextmenu", e => e.preventDefault());
+
+function zoomCenter(factor){
+  if(state.mode === "draw"){
+    if(zoomDrawAt(W / 2, H / 2, factor)) scheduleRender();
+  } else {
+    if(zoomAt(W / 2, H / 2, factor)) scheduleRender();
+  }
+}
+document.getElementById("zIn").addEventListener("click", () => zoomCenter(1.4));
+document.getElementById("zOut").addEventListener("click", () => zoomCenter(1 / 1.4));
+document.getElementById("zReset").addEventListener("click", () => {
+  if(state.mode === "draw"){
+    state.drawZoom = 1;
+    state.drawPan = { x: 0, y: 0 };
+    scheduleRender();
+    return;
+  }
+  state.zoom = 1;
+  state.pan.x = 0;
+  state.pan.y = 0;
+  updateView();
+  scheduleRender();
+});
+
+// 配置フェーズの図形スケール微調整
+document.getElementById("sUp").addEventListener("click", () => {
+  if(state.mode !== "place") return;
+  state.scale *= 1.1;
+  scheduleRender();
+});
+document.getElementById("sDown").addEventListener("click", () => {
+  if(state.mode !== "place") return;
+  state.scale /= 1.1;
+  scheduleRender();
+});
+
+document.getElementById("btnHint").addEventListener("click", () => {
+  state.showHint = !state.showHint;
+  updateUI();
+  scheduleRender();
+});
+
+document.getElementById("btnUndo").addEventListener("click", () => {
+  if(state.polys.length > 0){
+    state.polys.pop();
+    updateUI();
+    scheduleRender();
+  }
+});
+
+document.getElementById("btnClear").addEventListener("click", () => {
+  state.polys = [];
+  state.stroke = null;
+  updateUI();
+  scheduleRender();
+});
+
+document.getElementById("btnPlace").addEventListener("click", goPlace);
+document.getElementById("btnGrade").addEventListener("click", grade);
+
+document.getElementById("btnBack").addEventListener("click", () => {
+  state.mode = "draw";
+  state.fitBBox = null;
+  gesture = null;
+  pointers.clear();
+  applyView();
+  updateUI();
+  scheduleRender();
+});
+
+document.getElementById("btnNext").addEventListener("click", async () => {
+  state.fitBBox = null;
+  if(state.tab === "muni"){
+    await randomMuniAcrossAllPrefs();
+  } else {
+    selectPref(randomPrefName() || state.currentPref);
+  }
+});
+
+document.getElementById("btnRandom").addEventListener("click", async () => {
+  if(!state.loaded) return;
+  if(state.tab === "muni"){
+    await randomMuniAcrossAllPrefs();
+  } else {
+    selectPref(randomPrefName() || state.currentPref);
+  }
+});
+
+document.getElementById("prefSel").addEventListener("change", async e => {
+  if(!state.loaded) return;
+  const prefName = e.target.value;
+  if(state.tab === "muni"){
+    await enterMuniMode(prefName, true);
+  } else {
+    selectPref(prefName);
+  }
+});
+
+document.getElementById("muniSel").addEventListener("change", e => {
+  if(!state.loaded || state.tab !== "muni") return;
+  selectMuniTarget(state.currentPref, e.target.value);
+});
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+
+/* =========================================================
+   リサイズ
+   ========================================================= */
+function resize(){
+  const r = CV.parentElement.getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(1, Math.floor(r.width));
+  H = Math.max(1, Math.floor(r.height));
+  CV.width = Math.round(W * DPR);
+  CV.height = Math.round(H * DPR);
+  CV.style.width = W + "px";
+  CV.style.height = H + "px";
+  if(state.loaded){
+    computeBase();
+    updateView();
+    scheduleRender();
+  }
+}
+
+/* =========================================================
+   起動
+   ========================================================= */
+async function boot(){
+  const loadingTxt = document.getElementById("loadingTxt");
+
+  let prefs = null;
+  for(const url of SOURCES){
+    try{
+      const gj = await fetchJSON(url, 20000);
+      const p = buildPrefs(gj);
+      if(p.size >= 40){ prefs = p; break; }
+    }catch(err){
+      console.warn("[geo] failed:", url, err);
+    }
+  }
+  if(!prefs){
+    loadingTxt.innerHTML =
+      "地図データを取得できませんでした。<br>インターネット接続を確認して再読み込みしてください。";
+    const sp = document.querySelector(".spin");
+    if(sp) sp.style.display = "none";
+    return;
+  }
+  state.prefs = prefs;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for(const p of prefs.values()){
+    minX = Math.min(minX, p.bbox.minX);
+    minY = Math.min(minY, p.bbox.minY);
+    maxX = Math.max(maxX, p.bbox.maxX);
+    maxY = Math.max(maxY, p.bbox.maxY);
+  }
+  state.mapBBox = { minX, minY, maxX, maxY };
+
+  const sel = document.getElementById("prefSel");
+  sel.innerHTML = "";
+  for(const name of PREFS){
+    if(!prefs.has(name)) continue;
+    const o = document.createElement("option");
+    o.value = name;
+    o.textContent = name;
+    sel.appendChild(o);
+  }
+
+  state.loaded = true;
+  document.getElementById("loading").remove();
+
+  resize();
+  const first = randomPrefName();
+  if(first) selectPref(first);
+}
+
+if(window.ResizeObserver){
+  new ResizeObserver(() => resize()).observe(CV.parentElement);
+}else{
+  window.addEventListener("resize", resize);
+}
+
+boot();
+
+})();
+</script>
+</body>
+</html>
